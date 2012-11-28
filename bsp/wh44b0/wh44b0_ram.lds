@@ -1,14 +1,30 @@
 OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
 OUTPUT_ARCH(arm)
-ENTRY(_start)
+ENTRY(_rstart)
 SECTIONS
 {
-	. = 0x0c000000;
+	. = 0x00000000;
 	
 	. = ALIGN(4);
 	.text :	{
 		*(.init)
 		*(.text)
+		/* section information for finsh shell */
+		. = ALIGN(4);
+		__fsymtab_start = .;
+		KEEP(*(FSymTab))
+		__fsymtab_end = .;
+		. = ALIGN(4);
+		__vsymtab_start = .;
+		KEEP(*(VSymTab))
+		__vsymtab_end = .;
+		. = ALIGN(4);	
+
+		/* section information for modules */
+		. = ALIGN(4);
+		__rtmsymtab_start = .;
+		KEEP(*(RTMSymTab))
+		__rtmsymtab_end = .;
 	}
 	
 	. = ALIGN(4);

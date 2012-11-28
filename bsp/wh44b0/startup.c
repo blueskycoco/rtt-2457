@@ -18,6 +18,21 @@
 
 #include <s3c44b0.h>
 #include <board.h>
+#if defined(__CC_ARM)
+	extern int Image$$ER_ZI$$ZI$$Base;
+	extern int Image$$ER_ZI$$ZI$$Length;
+	extern int Image$$ER_ZI$$ZI$$Limit;
+#elif (defined (__GNUC__))
+	rt_uint8_t _undefined_stack_start[128];
+	rt_uint8_t _abort_stack_start[128];
+	rt_uint8_t _fiq_stack_start[1024];
+	rt_uint8_t _irq_stack_start[1024];	
+	rt_uint8_t _svc_stack_start[4096] SECTION(".nobss");
+#endif
+extern struct serial_device uart0;
+extern struct rt_device uart0_device;
+extern struct serial_device uart1;
+extern struct rt_device uart1_device;
 
 extern void rt_hw_interrupt_init(void);
 extern void rt_serial_init(void);
@@ -54,8 +69,8 @@ void rtthread_startup(void)
 	rt_hw_board_init();
 
 	/* init hardware serial */
-	rt_serial_init();
-
+	//rt_serial_init();
+	
 	rt_show_version();
 
 	/* init tick */
@@ -66,13 +81,13 @@ void rtthread_startup(void)
 
 	/* init timer system */
 	rt_system_timer_init();
-
+	
 	/* init memory system */
 #ifdef RT_USING_HEAP
 #ifdef __CC_ARM
-	rt_system_heap_init((void*)&Image$$RW_RAM1$$ZI$$Limit, (void*)0xD000000);
+	rt_system_heap_init((void*)&Image$$RW_RAM1$$ZI$$Limit, (void*)0xC800000);
 #else
-	rt_system_heap_init((void*)&__bss_end, (void*)0xD000000);
+	rt_system_heap_init((void*)&__bss_end, (void*)0xC800000);
 #endif
 #endif
 
@@ -81,10 +96,24 @@ void rtthread_startup(void)
 
 #ifdef RT_USING_HOOK
 	/* set idle thread hook */
-	rt_thread_idle_sethook(rt_hw_led_flash);
+//	rt_thread_idle_sethook(rt_hw_led_flash);
 #endif
-
+#ifdef RT_USING_DFS
+#ifdef RT_USING_MTD_NOR
+       sst39vfxx_mtd_init("nor", 2, 30);
+#endif 
+#endif
 #ifdef RT_USING_DEVICE
+	/* register uart0 */
+	rt_hw_serial_register(&uart0_device, "uart0",
+		RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_STREAM,
+		&uart0);
+
+	/* register uart2, used for RTI debug */
+	rt_hw_serial_register(&uart1_device, "uart1",
+		RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_STREAM,
+		&uart1);
+
     rt_device_init_all();
 #endif
 
@@ -93,10 +122,13 @@ void rtthread_startup(void)
 
 #ifdef RT_USING_FINSH
 	/* init the finsh input */
-	rt_hw_finsh_init();
+	//rt_hw_finsh_init();
 
 	/* init finsh */
 	finsh_system_init();
+	#ifdef RT_USING_DEVICE
+	finsh_set_device("uart0");
+	#endif
 #endif
 
 	/* init idle thread */
@@ -104,7 +136,7 @@ void rtthread_startup(void)
 
 	/* unmask interrupt */
 	rt_hw_interrupt_umask(INT_GLOBAL);
-
+	rt_kprintf("init finish1\n");
 	/* start scheduler */
 	rt_system_scheduler_start();
 

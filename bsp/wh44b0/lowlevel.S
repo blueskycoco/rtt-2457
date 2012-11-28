@@ -1,9 +1,9 @@
-.equ    B0_Tacs,      0x0 /* 0clk */
-.equ    B0_Tcos,      0x0 /* 0clk */
-.equ    B0_Tacc,      0x4 /* 6clk */
-.equ    B0_Tcoh,      0x0 /* 0clk */
-.equ    B0_Tah,       0x0 /* 0clk */
-.equ    B0_Tacp,      0x0 /* 0clk */
+.equ    B0_Tacs,      0x3 /* 0clk */
+.equ    B0_Tcos,      0x3 /* 0clk */
+.equ    B0_Tacc,      0x7 /* 6clk */
+.equ    B0_Tcoh,      0x3 /* 0clk */
+.equ    B0_Tah,       0x3/* 0clk */
+.equ    B0_Tacp,      0x1 /* 0clk */
 .equ    B0_PMC,       0x0 /* normal(1data) */
 
 /* Bank 1 parameter */
@@ -82,12 +82,12 @@
 .equ    REFEN,        0x1 /* Refresh enable */
 .equ    TREFMD,       0x0 /* CBR(CAS before RAS)/Auto refresh */
 .equ    Trp,	      0x0 /* 2clk */
-.equ    Trc,	      0x3 /* 0x1=5clk 0x3=11clk*/
-.equ    Tchr,	      0x0 /* 0x2=3clk 0x0=0clks  */
-.equ    REFCNT,       879
+.equ    Trc,	      0x1 /* 0x1=5clk 0x3=11clk*/
+.equ    Tchr,	      0x2 /* 0x2=3clk 0x0=0clks  */
+.equ    REFCNT,       1019
 
 MEMORY_CONFIG:
-  .long   0x11111900 /* Bank0 = OM[1:0] , Bank1-7 16bit, Bank2=Nowait,UB/LB*/
+  .long   0x11111001 /* Bank0 = OM[1:0] , Bank1-7 16bit, Bank2=Nowait,UB/LB*/
   .word ((B0_Tacs<<13)+(B0_Tcos<<11)+(B0_Tacc<<8)+(B0_Tcoh<<6)+(B0_Tah<<4)+(B0_Tacp<<2)+(B0_PMC)) /*GCS0*/
   .word ((B1_Tacs<<13)+(B1_Tcos<<11)+(B1_Tacc<<8)+(B1_Tcoh<<6)+(B1_Tah<<4)+(B1_Tacp<<2)+(B1_PMC)) /*GCS1*/
   .word ((B2_Tacs<<13)+(B2_Tcos<<11)+(B2_Tacc<<8)+(B2_Tcoh<<6)+(B2_Tah<<4)+(B2_Tacp<<2)+(B2_PMC)) /*GCS2*/
@@ -97,7 +97,7 @@ MEMORY_CONFIG:
   .word ((B6_MT<<15)+(B6_Trcd<<2)+(B6_SCAN))  /*GCS6*/
   .word ((B7_MT<<15)+(B7_Trcd<<2)+(B7_SCAN))  /*GCS7*/
   .word ((REFEN<<23)+(TREFMD<<22)+(Trp<<20)+(Trc<<18)+(Tchr<<16)+REFCNT)  /*REFRESH RFEN=1, TREFMD=0, trp=3clk, trc=5clk, tchr=3clk,count=1019*/
-  .word 0x16      /*SCLK power down mode, BANKSIZE 8M/8M*/
+  .word 0x10     /*SCLK power down mode, BANKSIZE 8M/8M*/
   .word 0x20      /*MRSR6 CL=2clk*/
   .word 0x20      /*MRSR7*/
 
@@ -113,7 +113,7 @@ lowlevel_init:
 	strb	r0, [r1]
 	
 	ldr	r1, =PLLCON
-	ldr	r0, =0x58061
+	ldr	r0, =((58<<12)+(3<<4)+1)
 	str	r0, [r1]
 	
 	ldr	r1, =CLKCON

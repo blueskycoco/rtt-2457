@@ -15,6 +15,7 @@
 
 #ifndef __BOARD_H__
 #define __BOARD_H__
+#include <serial.h>
 
 void rt_hw_board_init(void);
 void rt_hw_led_set(rt_uint32_t led);
@@ -23,5 +24,7 @@ void rt_hw_led_flash(void);
 #ifdef RT_USING_FINSH
 void rt_hw_finsh_init(void);
 #endif
-
+#ifdef RT_USING_MTD_NOR
+int sst39vfxx_mtd_init(const char * nor_name, unsigned int block_start, unsigned int block_end);
+#endif
 #endif

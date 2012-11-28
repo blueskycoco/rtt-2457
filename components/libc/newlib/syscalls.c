@@ -1,4 +1,4 @@
-#include <reent.h>
+#include <sys/reent.h>
 #include <sys/errno.h>
 #include <sys/time.h>
 #include <rtthread.h>

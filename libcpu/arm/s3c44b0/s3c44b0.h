@@ -81,7 +81,8 @@ extern "C" {
 #define UTXH1		(S3C_REGB(0x1d04020))
 #define URXH0		(S3C_REGB(0x1d00024))
 #define URXH1		(S3C_REGB(0x1d04024))
-
+#define U0BASE		ULCON0
+#define U1BASE		ULCON1
 /* SIO */
 #define SIOCON		(S3C_REG(0x1d14000))
 #define SIODAT		(S3C_REG(0x1d14004))

@@ -137,7 +137,7 @@ void rt_hw_trap_irq()
 #ifdef BSP_INT_DEBUG
 	rt_kprintf("I_ISPR: %d\n", intstat);
 #endif
-
+	//INTMSK = intstat;// mask this int by dillon
 	ispr = intstat;
 
 	/* to find interrupt */

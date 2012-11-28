@@ -17,11 +17,10 @@
  * @addtogroup S3C44B0
  */
 /*@{*/
-
 .section .init, "ax"
 .code 32
-.globl _start
-_start:
+.globl _rstart
+_rstart:
 	b reset
 	ldr	pc, _vector_undef
 	ldr	pc, _vector_swi
@@ -47,7 +46,7 @@ _vector_fiq:	.word vector_fiq
  * which are defined in linker script
  */
 .globl _rtthread_start
-_rtthread_start:.word _start
+_rtthread_start:.word _rstart
 .globl _rtthread_end
 _rtthread_end:	.word  _end
 
@@ -55,11 +54,10 @@ _rtthread_end:	.word  _end
  * rtthread bss start and end
  * which are defined in linker script
  */
-.globl _bss_start
-_bss_start:	.word __bss_start
-.globl _bss_end
-_bss_end:	.word __bss_end
-
+.globl __bss_start__
+__bss_start__:	.word __bss_start
+.globl __bss_end__
+__bss_end__:	.word __bss_end
 #if defined(__FLASH_BUILD__)
 /*
  * TEXT_BASE, 
@@ -76,7 +74,8 @@ _TEXT_BASE: .word	TEXT_BASE
 reset:
 	/* enter svc mode */
 	msr cpsr_c, #SVCMODE|NOINT
-
+	;bl led_off
+	
 	/*watch dog disable */
 	ldr r0,=WTCON
     ldr r1,=0x0 		
@@ -95,7 +94,6 @@ reset:
 	/* init lowlevel */
 	bl lowlevel_init
 #endif
-
 	/* setup stack */
 	bl stack_setup
 	
@@ -104,7 +102,7 @@ reset:
 	ldr r1, _TEXT_BASE		/* r1 <- the taget address          */
 	
 	ldr	r2, _rtthread_start
-	ldr	r3, _bss_start
+	ldr	r3, __bss_start__
 	sub	r2, r3, r2			/* r2 <- size of rtthread kernel    */
 	add	r2, r0, r2			/* r2 <- source end address         */
 	
@@ -114,12 +112,19 @@ copy_loop:
 	cmp	r0, r2				/* until source end addreee [r2]    */
 	ble	copy_loop
 #endif
+	/* clear .bss */
+	mov   	r0,#0                   /* get a zero 						*/
+	ldr   	r1,=__bss_start         /* bss start 						*/
+	ldr   	r2,=__bss_end           /* bss end 							*/
 	
+bss_loop:
+	cmp   	r1,r2                   /* check if data to clear 			*/
+	strlo 	r0,[r1],#4              /* clear 4 bytes 					*/
+	blo   	bss_loop                /* loop until done 					*/
 	/* start RT-Thread Kernel */
 	ldr	pc, _rtthread_startup
 
 _rtthread_startup: .word rtthread_startup
-
 	.equ USERMODE, 	0x10
 	.equ FIQMODE, 	0x11
 	.equ IRQMODE, 	0x12
@@ -131,7 +136,7 @@ _rtthread_startup: .word rtthread_startup
 
 /* exception handlers */
 vector_undef:	bl rt_hw_trap_udef
-vector_swi:		bl rt_hw_trap_swi
+vector_swi:	bl rt_hw_trap_swi
 vector_pabt: 	bl rt_hw_trap_pabt
 vector_dabt:	bl rt_hw_trap_dabt
 vector_resv: 	bl rt_hw_trap_resv
@@ -143,7 +148,7 @@ vector_resv: 	bl rt_hw_trap_resv
 .globl rt_interrupt_to_thread
 vector_irq:	
 	stmfd	sp!, {r0-r12,lr}
-	bl  led_off
+	/*bl  led_off*/
 	bl	rt_interrupt_enter
 	bl	rt_hw_trap_irq
 	bl	rt_interrupt_leave
@@ -251,7 +256,7 @@ led_off:
 	str	r0,	[r1]			@ r0->[r1]
 
 	ldr	r1,	=0x1d20014		@ r1<-PDATC
-	ldr	r0,	=0x0			@ r0<-00
+	ldr	r0,	=0x00			@ r0<-00
 	str	r0,	[r1]			@ r0->[r1]
 
 	mov	pc, lr

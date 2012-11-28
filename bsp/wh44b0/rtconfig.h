@@ -1,6 +1,8 @@
 /* RT-Thread config file */
 #ifndef __RTTHREAD_CFG_H__
 #define __RTTHREAD_CFG_H__
+//#define RT_DEBUG
+//#define RT_DEBUG_SCHEDULER 1
 
 /* RT_NAME_MAX*/
 #define RT_NAME_MAX	8
@@ -12,11 +14,19 @@
 #define RT_THREAD_PRIORITY_MAX	256
 
 /* Tick per Second*/
-#define RT_TICK_PER_SECOND	100
+#define RT_TICK_PER_SECOND	1000
 
 /* SECTION: RT_DEBUG */
 /* Thread Debug*/
 /* #define RT_THREAD_DEBUG */
+#define RT_USING_MTD_NOR
+#define RT_USING_DFS_JFFS2
+#define RT_USING_DFS
+#define RT_USING_DFS_DEVFS
+/* the max number of mounted filesystem */
+#define DFS_FILESYSTEMS_MAX			4
+/* the max number of opened files 		*/
+#define DFS_FD_MAX					4
 
 /* Using Hook*/
 #define RT_USING_HOOK
@@ -48,7 +58,7 @@
 #define RT_USING_HEAP
 
 /* Using Small MM*/
-/* #define RT_USING_SMALL_MEM */
+/*#define RT_USING_SMALL_MEM*/
 
 /* Using SLAB Allocator*/
 #define RT_USING_SLAB
@@ -60,15 +70,19 @@
 /* SECTION: Console options */
 /* the buffer size of console*/
 #define RT_CONSOLEBUF_SIZE	128
-
+#define RT_USING_CONSOLE
 /* SECTION: FinSH shell options */
 /* Using FinSH as Shell*/
-/* #define RT_USING_FINSH */
+#define RT_USING_FINSH
+#define FINSH_USING_SYMTAB
+#define FINSH_USING_DESCRIPTION
+#define FINSH_THREAD_STACK_SIZE	4096
 
 /* SECTION: a mini libc */
 /* Using mini libc library*/
-/* #define RT_USING_MINILIBC */
-
+/*#define RT_USING_MINILIBC*/
+#define RT_USING_NEWLIB
+//#define RT_USING_PTHREADS
 /* SECTION: C++ support */
 /* Using C++ support*/
 /* #define RT_USING_CPLUSPLUS */
