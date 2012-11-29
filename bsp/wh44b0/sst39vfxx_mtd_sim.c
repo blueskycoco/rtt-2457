@@ -46,11 +46,11 @@ static struct sst39_mtd _sst39_mtd;
 static struct rt_mutex flash_lock;
 #define	CHECK_DELAY	150000
 
-static rt_uint16_t state;
+static rt_uint16_t state=0x00;
 static rt_uint16_t support;
 static rt_uint32_t chip_id; 
-#define inportw(r) 		(*(volatile rt_uint16_t *)r)
-#define outportw(r, d) 	(*(volatile rt_uint16_t *)r = d)
+#define inportw(r) 		(*(volatile rt_uint16_t *)(r))
+#define outportw(r, d) 	(*(volatile rt_uint16_t *)(d) = r)
 
 static void CFIQueryExit(void)
 {
@@ -74,7 +74,6 @@ static void SWPIDEntry(void)
 		else
 			CFIQueryExit();
 	}
-
 	outportw(0xaaaa, ROM_BASE+0xaaaa);//CMD_ADDR0 = 0xaaaa;
 	outportw(0x5555, ROM_BASE+0x5554);//CMD_ADDR1 = 0x5555;
 	outportw(0x9090, ROM_BASE+0xaaaa);//CMD_ADDR0 = 0x9090;
@@ -84,7 +83,7 @@ static void SWPIDEntry(void)
 static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 {
 	rt_uint32_t i;
-	
+
 	SWPIDEntry();
 	i  = inportw(ROM_BASE);
 	i |= inportw(ROM_BASE+2)<<16;
@@ -94,16 +93,16 @@ static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 static rt_uint8_t SectorErase(rt_uint32_t sector)
 {
 	rt_uint32_t tm, d1 ,d2;
-	
+
 	if(state&1) {
 		if(state&2)
 			SWPIDExit();
 		else
 			CFIQueryExit();						
 	}
-	
+
 	sector += ROM_BASE;
-	
+
 	outportw(0xaaaa, ROM_BASE+0xaaaa);
 	outportw(0x5555, ROM_BASE+0x5554);
 	outportw(0x8080, ROM_BASE+0xaaaa);
@@ -111,40 +110,40 @@ static rt_uint8_t SectorErase(rt_uint32_t sector)
 	outportw(0x5555, ROM_BASE+0x5554);
 	outportw(0x3030, sector);	
 	d2 = inportw(sector);
-	
+
 	tm = CHECK_DELAY;
 	while(1) {
-	
+
 		tm--;
 		if(!tm)
 			return -1;
-		
+
 		d1 = d2;
 		d2 = inportw(sector);		
-		
+
 		if((d1^d2)&(1<<6)) {	//D6 == D6
 			continue;
 		}
-		
+
 		if(inportw(sector)==0xffff) {
 			rt_kprintf("tm=%d\n", tm);
 			return RT_EOK;
 		}
-		
+
 	}
 }
 static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t WordCnt)
 {	
 	ProgStart += ROM_BASE;
-	
+
 	for( ; WordCnt; ProgStart+=2, DataPtr++, WordCnt--) {
 		rt_uint32_t tm;
-	
+
 		outportw(0xaaaa, ROM_BASE+0xaaaa);
 		outportw(0x5555, ROM_BASE+0x5554);
 		outportw(0xa0a0, ROM_BASE+0xaaaa);
 		outportw(*DataPtr, ProgStart);
-		
+
 		tm = CHECK_DELAY;
 		while(1) {			
 			if((inportw(ProgStart)^inportw(ProgStart))&(0x40)) {	//D6 == D6
@@ -153,13 +152,13 @@ static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t Wo
 					return -1;
 				continue;
 			}
-			
+
 			if(inportw(ProgStart)==*DataPtr)
 				break;					//D7 == D7
 			tm--;
 			if(!tm)
 				return -1;
-					
+
 		}
 	}
 	return 0;
@@ -223,7 +222,7 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 
 	rt_mutex_release(&flash_lock);
 	return size;
-	}
+}
 
 static char block_buffer[BLOCK_SIZE];
 
@@ -253,7 +252,7 @@ const static struct rt_mtd_nor_driver_ops sst39vfxx_mtd_ops =
 static rt_err_t sst39vfxx_hw_init(struct sst39_mtd *mtd)
 {
 	mtd = mtd;
-    return RT_EOK;
+	return RT_EOK;
 }
 
 /**
@@ -263,64 +262,68 @@ rt_err_t sst39vfxx_mtd_init(const char * nor_name,
 		rt_uint32_t block_start,
 		rt_uint32_t block_end)
 {
-    rt_uint32_t id, total_block;
+	rt_uint32_t id, total_block;
 	struct sst39_mtd * sst39;
-    struct rt_mtd_nor_device *mtd;
+	struct rt_mtd_nor_device *mtd;
 
-
-    sst39 = &_sst39_mtd;
+	rt_kprintf("sst39vfxx_mtd_init ==>\n");
+	sst39 = &_sst39_mtd;
 	mtd = &(sst39->parent);
 
-    /* set page size and block size */
-    mtd->block_size = 64 * 1024; /* 64kByte */
-    mtd->ops = &sst39vfxx_mtd_ops;
+	/* set page size and block size */
+	mtd->block_size = 64 * 1024; /* 64kByte */
+	mtd->ops = &sst39vfxx_mtd_ops;
 
-    /* initialize mutex */
+	/* initialize mutex */
 	if (rt_mutex_init(&flash_lock, nor_name, RT_IPC_FLAG_FIFO) != RT_EOK)
 	{
 		rt_kprintf("init sd lock mutex failed\n");
 	}
+	rt_kprintf("sst39vfxx_mtd_init 1\n");
 
-    /* initialize flash */
-    id = sst39vfxx_read_id(mtd);
-    switch (id & 0xff)
-    {
-    case MC_ID_SST39VF016:
-    	total_block = (16 * 1024 * 1024 / 8) / mtd->block_size;
-    	break;
-    case MC_ID_SST39VF032:
-    	total_block = (32 * 1024 * 1024 / 8) / mtd->block_size;
-    	break;
-    case MC_ID_SST39VF064:
-    	total_block = (64 * 1024 * 1024 / 8) / mtd->block_size;
-    	break;
-    default:
-    	rt_kprintf("SST39 detection error, id: %x\n", id);
-    	return -RT_ERROR;
-    }
+	/* initialize flash */
+	id = sst39vfxx_read_id(mtd);
+	rt_kprintf("sst39vfxx_mtd_init id %2x\n",id);
+	switch (id & 0xff)
+	{
+		case MC_ID_SST39VF016:
+			total_block = (16 * 1024 * 1024 / 8) / mtd->block_size;
+			break;
+		case MC_ID_SST39VF032:
+			total_block = (32 * 1024 * 1024 / 8) / mtd->block_size;
+			break;
+		case MC_ID_SST39VF064:
+			total_block = (64 * 1024 * 1024 / 8) / mtd->block_size;
+			break;
+		default:
+			rt_kprintf("SST39 detection error, id: %x\n", id);
+			return -RT_ERROR;
+	}
 
-    if ((block_end == RT_UINT32_MAX) || (block_end == 0))
-    {
-    	block_end = total_block;
-    }
-    else if (block_end > total_block)
-    {
-    	rt_kprintf("SST39 total block: %d, out of block\n", total_block);
-    	return -RT_ERROR;
-    }
+	if ((block_end == RT_UINT32_MAX) || (block_end == 0))
+	{
+		block_end = total_block;
+	}
+	else if (block_end > total_block)
+	{
+		rt_kprintf("SST39 total block: %d, out of block\n", total_block);
+		return -RT_ERROR;
+	}
 
-    mtd->block_start = block_start;
-    mtd->block_end   = block_end;
+	mtd->block_start = block_start;
+	mtd->block_end   = block_end;
 
-	
 
-    /* initialize hardware */
-    sst39vfxx_hw_init(&_sst39_mtd);
 
-    /* register MTD device */
+	/* initialize hardware */
+	sst39vfxx_hw_init(&_sst39_mtd);
+
+	rt_kprintf("sst39vfxx_mtd_init 2\n");
+	/* register MTD device */
 	rt_mtd_nor_register_device("nor", mtd);
+	rt_kprintf("sst39vfxx_mtd_init <==\n");
 
-    return RT_EOK;
+	return RT_EOK;
 }
 
 #ifdef RT_USING_FINSH
@@ -328,9 +331,9 @@ rt_err_t sst39vfxx_mtd_init(const char * nor_name,
 void nor_erase(void)
 {
 	rt_uint32_t index;
-    struct rt_mtd_nor_device *mtd;
+	struct rt_mtd_nor_device *mtd;
 
-    mtd = SST39_MTD(&_sst39_mtd);
+	mtd = SST39_MTD(&_sst39_mtd);
 	for (index = mtd->block_start; index < mtd->block_end; index ++)
 	{
 		sst39vfxx_erase_block(mtd, index * mtd->block_size);

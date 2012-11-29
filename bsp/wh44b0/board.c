@@ -80,7 +80,7 @@ static void rt_hw_uart_init(void)
 	uart0.uart_device->ucon = 0x245;
 	/* Set uart0 bps */	
 	#if defined(__FLASH_BUILD__)
-	divisor = ((int)(64000000/16./115200 + 0.5) -1);//0x20;
+	divisor = ((int)(66000000/16./115200 + 0.5) -1);//0x20;
 	#else
 	divisor = ((int)(40000000/16./115200 + 0.5) -1);//0x20;
 	#endif

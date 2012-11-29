@@ -100,7 +100,7 @@ void rtthread_startup(void)
 #endif
 #ifdef RT_USING_DFS
 #ifdef RT_USING_MTD_NOR
-       sst39vfxx_mtd_init("nor", 2, 30);
+       sst39vfxx_mtd_init("nor", 10, 20);
 #endif 
 #endif
 #ifdef RT_USING_DEVICE

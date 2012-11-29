@@ -7,21 +7,21 @@
 .equ    B0_PMC,       0x0 /* normal(1data) */
 
 /* Bank 1 parameter */
-.equ    B1_Tacs,      0x3 /* 4clk */
-.equ    B1_Tcos,      0x3 /* 4clk */
-.equ    B1_Tacc,      0x7 /* 14clkv */
-.equ    B1_Tcoh,      0x3 /* 4clk */
-.equ    B1_Tah,       0x3 /* 4clk */
-.equ    B1_Tacp,      0x3 /* 6clk */
+.equ    B1_Tacs,      0x0 /* 4clk */
+.equ    B1_Tcos,      0x1 /* 4clk */
+.equ    B1_Tacc,      0x2 /* 14clkv */
+.equ    B1_Tcoh,      0x1 /* 4clk */
+.equ    B1_Tah,       0x0 /* 4clk */
+.equ    B1_Tacp,      0x0 /* 6clk */
 .equ    B1_PMC,       0x0 /* normal(1data) */
 
 /* Bank 2 parameter - LAN91C96 */
-.equ    B2_Tacs,      0x3 /* 4clk */
-.equ    B2_Tcos,      0x3 /* 4clk */
-.equ    B2_Tacc,      0x7 /* 14clk */
-.equ    B2_Tcoh,      0x3 /* 4clk */
-.equ    B2_Tah,       0x3 /* 4clk */
-.equ    B2_Tacp,      0x3 /* 6clk */
+.equ    B2_Tacs,      0x0 /* 4clk */
+.equ    B2_Tcos,      0x2 /* 4clk */
+.equ    B2_Tacc,      0x4 /* 14clk */
+.equ    B2_Tcoh,      0x2 /* 4clk */
+.equ    B2_Tah,       0x0 /* 4clk */
+.equ    B2_Tacp,      0x0 /* 6clk */
 .equ    B2_PMC,       0x0 /* normal(1data) */
 
 /* Bank 3 parameter */
@@ -43,12 +43,12 @@
 .equ    B4_PMC,       0x0 /* normal(1data) */
 
 /* Bank 5 parameter */
-.equ    B5_Tacs,      0x3 /* 4clk */
-.equ    B5_Tcos,      0x3 /* 4clk */
-.equ    B5_Tacc,      0x7 /* 14clk */
-.equ    B5_Tcoh,      0x3 /* 4clk */
-.equ    B5_Tah,       0x3 /* 4clk */
-.equ    B5_Tacp,      0x3 /* 6clk */
+.equ    B5_Tacs,      0x0 /* 4clk */
+.equ    B5_Tcos,      0x1 /* 4clk */
+.equ    B5_Tacc,      0x4 /* 14clk */
+.equ    B5_Tcoh,      0x1 /* 4clk */
+.equ    B5_Tah,       0x0 /* 4clk */
+.equ    B5_Tacp,      0x0 /* 6clk */
 .equ    B5_PMC,       0x0 /* normal(1data) */
 
 /* Bank 6(if SROM) parameter */
@@ -71,11 +71,11 @@
 
 /* Bank 6 parameter */
 .equ    B6_MT,        0x3 /* SDRAM */
-.equ    B6_Trcd,      0x0 /* 2clk */
+.equ    B6_Trcd,      0x1 /* 2clk */
 .equ    B6_SCAN,      0x0 /* 8bit */
 
 .equ    B7_MT,        0x3 /* SDRAM */
-.equ    B7_Trcd,      0x0 /* 2clk */
+.equ    B7_Trcd,      0x1 /* 2clk */
 .equ    B7_SCAN,      0x0 /* 8bit */
 
 /* REFRESH parameter */
@@ -84,10 +84,10 @@
 .equ    Trp,	      0x0 /* 2clk */
 .equ    Trc,	      0x1 /* 0x1=5clk 0x3=11clk*/
 .equ    Tchr,	      0x2 /* 0x2=3clk 0x0=0clks  */
-.equ    REFCNT,       1019
+.equ    REFCNT,       1550
 
 MEMORY_CONFIG:
-  .long   0x11111001 /* Bank0 = OM[1:0] , Bank1-7 16bit, Bank2=Nowait,UB/LB*/
+  .long   0x01001102 /* Bank0 = OM[1:0] , Bank1-7 16bit, Bank2=Nowait,UB/LB*/
   .word ((B0_Tacs<<13)+(B0_Tcos<<11)+(B0_Tacc<<8)+(B0_Tcoh<<6)+(B0_Tah<<4)+(B0_Tacp<<2)+(B0_PMC)) /*GCS0*/
   .word ((B1_Tacs<<13)+(B1_Tcos<<11)+(B1_Tacc<<8)+(B1_Tcoh<<6)+(B1_Tah<<4)+(B1_Tacp<<2)+(B1_PMC)) /*GCS1*/
   .word ((B2_Tacs<<13)+(B2_Tcos<<11)+(B2_Tacc<<8)+(B2_Tcoh<<6)+(B2_Tah<<4)+(B2_Tacp<<2)+(B2_PMC)) /*GCS2*/
