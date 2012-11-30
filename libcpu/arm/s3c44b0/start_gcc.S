@@ -17,10 +17,11 @@
  * @addtogroup S3C44B0
  */
 /*@{*/
+
 .section .init, "ax"
 .code 32
-.globl _rstart
-_rstart:
+.globl _start
+_start:
 	b reset
 	ldr	pc, _vector_undef
 	ldr	pc, _vector_swi
@@ -46,7 +47,7 @@ _vector_fiq:	.word vector_fiq
  * which are defined in linker script
  */
 .globl _rtthread_start
-_rtthread_start:.word _rstart
+_rtthread_start:.word _start
 .globl _rtthread_end
 _rtthread_end:	.word  _end
 
@@ -54,10 +55,11 @@ _rtthread_end:	.word  _end
  * rtthread bss start and end
  * which are defined in linker script
  */
-.globl __bss_start__
-__bss_start__:	.word __bss_start
-.globl __bss_end__
-__bss_end__:	.word __bss_end
+.globl _bss_start
+_bss_start:	.word __bss_start
+.globl _bss_end
+_bss_end:	.word __bss_end
+
 #if defined(__FLASH_BUILD__)
 /*
  * TEXT_BASE, 
@@ -74,8 +76,7 @@ _TEXT_BASE: .word	TEXT_BASE
 reset:
 	/* enter svc mode */
 	msr cpsr_c, #SVCMODE|NOINT
-	;bl led_off
-	
+
 	/*watch dog disable */
 	ldr r0,=WTCON
     ldr r1,=0x0 		
@@ -94,6 +95,7 @@ reset:
 	/* init lowlevel */
 	bl lowlevel_init
 #endif
+
 	/* setup stack */
 	bl stack_setup
 	
@@ -102,7 +104,7 @@ reset:
 	ldr r1, _TEXT_BASE		/* r1 <- the taget address          */
 	
 	ldr	r2, _rtthread_start
-	ldr	r3, __bss_start__
+	ldr	r3, _bss_start
 	sub	r2, r3, r2			/* r2 <- size of rtthread kernel    */
 	add	r2, r0, r2			/* r2 <- source end address         */
 	
@@ -114,8 +116,8 @@ copy_loop:
 #endif
 	/* clear .bss */
 	mov   	r0,#0                   /* get a zero 						*/
-	ldr   	r1,=__bss_start         /* bss start 						*/
-	ldr   	r2,=__bss_end           /* bss end 							*/
+	ldr   	r1,=_bss_start         /* bss start 						*/
+	ldr   	r2,=_bss_end           /* bss end 							*/
 	
 bss_loop:
 	cmp   	r1,r2                   /* check if data to clear 			*/

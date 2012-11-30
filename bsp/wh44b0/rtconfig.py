@@ -5,7 +5,6 @@ ARCH     = 'arm'
 CPU      = 's3c44b0'
 #TextBase = '0x0c008000'
 TextBase = '0x0'
-POSITION = 'home'
 CROSS_TOOL 	= 'gcc'
 
 if os.getenv('RTT_CC'):
@@ -13,10 +12,7 @@ if os.getenv('RTT_CC'):
 
 if  CROSS_TOOL == 'gcc':
 	PLATFORM 	= 'gcc'
-	if POSITION == 'home':
-		EXEC_PATH	= '/opt/CrossCompile/CodeSourcery/Sourcery_CodeBench_for_ARM_EABI/bin'
-	else:
-		EXEC_PATH 	= 'c:/Program Files(x86)/yagarto/bin'
+	EXEC_PATH	= '/opt/CrossCompile/CodeSourcery/Sourcery_CodeBench_for_ARM_EABI/bin'
 	
 elif CROSS_TOOL == 'keil':
 	PLATFORM 	= 'armcc'
@@ -34,10 +30,7 @@ BUILD = 'debugr'
 
 if PLATFORM == 'gcc':
     # toolchains
-	if POSITION == 'home':
-		PREFIX = 'arm-none-eabi-'
-	else:
-		PREFIX = 'arm-elf-'
+	PREFIX = 'arm-none-eabi-'
 	CC = PREFIX + 'gcc'
 	CXX = PREFIX + 'g++'
 	AS = PREFIX + 'gcc'
@@ -56,7 +49,7 @@ if PLATFORM == 'gcc':
 		CFLAGS += ' -D__FLASH_BUILD__'
 	else:
 		AFLAGS = ' -c' + DEVICE + ' -x assembler-with-cpp' + ' -DTEXT_BASE=' + TextBase
-	LFLAGS = DEVICE + ' -Wl,--gc-sections,-Map=rtthread_wh44b0.map,-cref,-u,_rstart -T wh44b0_ram.lds' + ' -Ttext ' + TextBase
+	LFLAGS = DEVICE + ' -Wl,--gc-sections,-Map=rtthread_wh44b0.map,-cref,-u,_start -T wh44b0_ram.lds' + ' -Ttext ' + TextBase
 
 	CPATH = ''
 	LPATH = ''
