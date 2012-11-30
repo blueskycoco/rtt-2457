@@ -76,7 +76,6 @@ _TEXT_BASE: .word	TEXT_BASE
 reset:
 	/* enter svc mode */
 	msr cpsr_c, #SVCMODE|NOINT
-
 	/*watch dog disable */
 	ldr r0,=WTCON
     ldr r1,=0x0 		
@@ -116,8 +115,8 @@ copy_loop:
 #endif
 	/* clear .bss */
 	mov   	r0,#0                   /* get a zero 						*/
-	ldr   	r1,=_bss_start         /* bss start 						*/
-	ldr   	r2,=_bss_end           /* bss end 							*/
+	ldr   	r1,=__bss_start         /* bss start 						*/
+	ldr   	r2,=__bss_end           /* bss end 							*/
 	
 bss_loop:
 	cmp   	r1,r2                   /* check if data to clear 			*/

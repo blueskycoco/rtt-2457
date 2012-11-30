@@ -40,15 +40,15 @@ static struct rt_mutex flash_lock;
 
 static void SWPIDExit(void)
 {
-	outportw(0xaaaa, ROM_BASE+0xaaaa);
-	outportw(0x5555, ROM_BASE+0x5554);
-	outportw(0xf0f0, ROM_BASE+0xaaaa);
+	outportw(0x00aa, ROM_BASE+0xaaaa);
+	outportw(0x0055, ROM_BASE+0x5554);
+	outportw(0x00f0, ROM_BASE+0xaaaa);
 }
 static void SWPIDEntry(void)
 {
-	outportw(0xaaaa, ROM_BASE+0xaaaa);
-	outportw(0x5555, ROM_BASE+0x5554);
-	outportw(0x9090, ROM_BASE+0xaaaa);
+	outportw(0x00aa, ROM_BASE+0xaaaa);
+	outportw(0x0055, ROM_BASE+0x5554);
+	outportw(0x0090, ROM_BASE+0xaaaa);
 }
 /* RT-Thread MTD device interface */
 static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
@@ -95,12 +95,15 @@ static rt_uint8_t SectorErase(rt_uint32_t sector)
 }
 static rt_uint8_t BlockErase(rt_uint32_t block)
 {
-	outportw(0xaaaa, ROM_BASE+0xaaaa);
-	outportw(0x5555, ROM_BASE+0x5554);
-	outportw(0x8080, ROM_BASE+0xaaaa);
-	outportw(0xaaaa, ROM_BASE+0xaaaa);
-	outportw(0x5555, ROM_BASE+0x5554);
-	outportw(0x5050, ROM_BASE+block);	
+	//rt_kprintf("Erase Block 0x%x\n",block);
+	outportw(0x00aa, ROM_BASE+0xaaaa);
+	outportw(0x0055, ROM_BASE+0x5554);
+	outportw(0x0080, ROM_BASE+0xaaaa);
+	outportw(0x00aa, ROM_BASE+0xaaaa);
+	outportw(0x0055, ROM_BASE+0x5554);
+	//rt_kprintf("Erase Block %d\n",block/(64*1024));
+	outportw(0x0050, ROM_BASE+block)*2;	
+	//rt_kprintf("Erase Block %d\n",block/(64*1024));
 	return check_toggle_ready(ROM_BASE+block);
 }
 static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t WordCnt)

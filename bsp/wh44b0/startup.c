@@ -81,7 +81,6 @@ void rtthread_startup(void)
 
 	/* init timer system */
 	rt_system_timer_init();
-	
 	/* init memory system */
 #ifdef RT_USING_HEAP
 #ifdef __CC_ARM
@@ -96,15 +95,15 @@ void rtthread_startup(void)
 
 #ifdef RT_USING_HOOK
 	/* set idle thread hook */
-//	rt_thread_idle_sethook(rt_hw_led_flash);
+	rt_thread_idle_sethook(rt_hw_led_flash);
 #endif
 #ifdef RT_USING_DFS
-	dfs_jffs2_init();
-	devfs_init();
-	libc_system_init("uart0");
 #ifdef RT_USING_MTD_NOR
        sst39vfxx_mtd_init("nor", 10, 20);
 #endif 
+//	dfs_jffs2_init();
+//	devfs_init();
+//	libc_system_init("uart1");
 #endif
 #ifdef RT_USING_DEVICE
 	/* register uart0 */
