@@ -99,6 +99,9 @@ void rtthread_startup(void)
 //	rt_thread_idle_sethook(rt_hw_led_flash);
 #endif
 #ifdef RT_USING_DFS
+	dfs_jffs2_init();
+	devfs_init();
+	libc_system_init("uart0");
 #ifdef RT_USING_MTD_NOR
        sst39vfxx_mtd_init("nor", 10, 20);
 #endif 
