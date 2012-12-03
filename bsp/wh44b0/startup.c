@@ -99,7 +99,7 @@ void rtthread_startup(void)
 #endif
 #ifdef RT_USING_DFS
 #ifdef RT_USING_MTD_NOR
-       sst39vfxx_mtd_init("nor", 10, 20);
+       sst39vfxx_mtd_init("nor", 3, 20);
 #endif 
 //	dfs_jffs2_init();
 //	devfs_init();

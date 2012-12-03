@@ -88,6 +88,7 @@ static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 }
 static rt_uint8_t SectorErase(rt_uint32_t sector)
 {
+	rt_kprintf("SectorErase %x\n",sector);
 	rt_hw_interrupt_mask(INT_GLOBAL);
 	outportw(0xaaaa, ROM_BASE+0xaaaa);
 	outportw(0x5555, ROM_BASE+0x5554);
@@ -95,6 +96,7 @@ static rt_uint8_t SectorErase(rt_uint32_t sector)
 	outportw(0xaaaa, ROM_BASE+0xaaaa);
 	outportw(0x5555, ROM_BASE+0x5554);
 	outportw(0x3030, ROM_BASE+sector);	
+	rt_kprintf("Leave SectorErase %x\n",sector);
 	return check_toggle_ready(ROM_BASE+sector);
 }
 static rt_uint8_t BlockErase(rt_uint32_t block)
@@ -120,10 +122,10 @@ static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t Wo
         
     if(check_toggle_ready(ROM_BASE+ProgStart)!=RT_EOK)
     {
-    		rt_hw_interrupt_umask(INT_GLOBAL);
+    		//rt_hw_interrupt_umask(INT_GLOBAL);
         return -1;
     }
-    rt_hw_interrupt_umask(INT_GLOBAL);
+    //rt_hw_interrupt_umask(INT_GLOBAL);
 
 		}
 	return 0;
@@ -135,10 +137,11 @@ static int sst39vfxx_read(struct rt_mtd_nor_device* device, rt_off_t position, r
 
 	sst39 = SST39_MTD(device);
 	RT_ASSERT(sst39 != RT_NULL);
-
+rt_kprintf("Enter sst39vfxx_read %x\n",position);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
-	rt_memcpy(data, (rt_uint8_t *)position, (rt_uint8_t)size);
+	rt_memcpy(data, (rt_uint8_t *)(position*2), (rt_uint8_t)size);
 	rt_mutex_release(&flash_lock);
+	rt_kprintf("Leave sst39vfxx_read \n");
 	return size;
 }
 
@@ -147,48 +150,56 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 {
 	struct sst39_mtd *sst39;
 	int result;
-	rt_uint8_t buf[0x1000];
+	rt_uint8_t *buf=rt_malloc(0x1000);
 	rt_uint32_t  tmp = 0x1000-(position&0xfff);
 	rt_uint16_t err;
 	sst39 = SST39_MTD(device);
 	RT_ASSERT(sst39 != RT_NULL);
-
+	rt_kprintf("Enter sst39vfxx_write %x,size %x\n",position,size);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
-
+	rt_kprintf("1\n");
 	if(tmp>size)
 		tmp = size;
 	if(tmp&1)
 		tmp++;
-
+rt_kprintf("2\n");
 	for(; size;) 
     {
+    	rt_kprintf("3\n");
 		if(tmp<0x1000)
 		{
-			rt_memcpy(buf, (position&~0xfff), 0x1000);
-			memcpy(buf+(position&0xfff), (char *)data, tmp);
+			rt_kprintf("3.3\n");
+			rt_memcpy(buf, (rt_uint8_t *)(2*position&~0xfff), 0x1000);
+			rt_kprintf("4\n");
+			rt_memcpy(buf+(position&0xfff), (rt_uint8_t *)data, (rt_uint8_t)tmp);
+			rt_kprintf("5\n");
 		} 
 		else 
 		{
-			memcpy(buf, (char *)data, 0x1000);
+			rt_memcpy(buf, (char *)data, 0x1000);
 		}
-
-		err = SectorErase(position&~0xfff);
+rt_kprintf("6\n");
+		err = SectorErase(2*position&~0xfff);
 		if(err) 
-        {	//4K Bytes boudary
-			rt_kprintf("\t\tErase 0x%x Fail!!!\n", position&~0xfff);
+    {	//4K Bytes boudary
+					rt_kprintf("\t\tErase 0x%x Fail!!!\n", position&~0xfff);
+					
 	        rt_mutex_release(&flash_lock);
+	        rt_free(buf);
             return -1;
 		}
+		rt_kprintf("to program\n");
 
-		rt_kprintf("Program 0x%x %s\n", position&~0xfff, FlashProg(position&~0xfff, (rt_uint16_t *)buf, 0x1000>>1)?"\tFail!!! Error!!!":"Ok");
+		rt_kprintf("Program 0x%x %s\n", position&~0xfff, FlashProg(2*position&~0xfff, (rt_uint16_t *)buf, 0x1000>>1)?"\tFail!!! Error!!!":"Ok");
 
 		size -= tmp;
 		position  += tmp;
 		data  += tmp;
 		tmp   = (size>0x1000)?0x1000:size;
 	}	
-
 	rt_mutex_release(&flash_lock);
+	rt_free(buf);
+	rt_kprintf("Leave sst39vfxx_write \n");
 	return size;
 }
 
@@ -200,10 +211,11 @@ static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_uint3
 	sst39 = SST39_MTD(device);
 
 	RT_ASSERT(sst39 != RT_NULL);
-
+rt_kprintf("Enter sst39vfxx_erase \n");
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
 	result=BlockErase(block);
 	rt_mutex_release(&flash_lock);
+	rt_kprintf("Leave sst39vfxx_erase \n");
 	return result;
 }
 
