@@ -104,6 +104,14 @@ void rtthread_startup(void)
 //	dfs_jffs2_init();
 //	devfs_init();
 //	libc_system_init("uart1");
+	dfs_init();
+	dfs_jffs2_init();
+	if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
+  {
+      rt_kprintf("jffs2 initialized!\n");
+  }
+  else
+      rt_kprintf("jffs2 initialzation failed!\n");
 #endif
 #ifdef RT_USING_DEVICE
 	/* register uart0 */

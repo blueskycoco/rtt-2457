@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "sst39vfxx_mtd.h"
-
+#include <s3c44b0.h>
 #ifdef RT_USING_MTD_NOR
 #define ROM_BASE 0x00000000
 #define MC_ID_SST39VF016               (0xBF)
@@ -63,13 +63,17 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
         CurrData = inportw(dst);
         CurrData = CurrData & 0x0040;
         if(CurrData == PreData)
+        {
+        		rt_hw_interrupt_umask(INT_GLOBAL);
             return RT_EOK;
+        }
         else
         {
             PreData = CurrData;
             TimeOut++;
         }
     }
+    rt_hw_interrupt_umask(INT_GLOBAL);
     return -1;
 }
 static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
@@ -84,7 +88,7 @@ static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 }
 static rt_uint8_t SectorErase(rt_uint32_t sector)
 {
-
+	rt_hw_interrupt_mask(INT_GLOBAL);
 	outportw(0xaaaa, ROM_BASE+0xaaaa);
 	outportw(0x5555, ROM_BASE+0x5554);
 	outportw(0x8080, ROM_BASE+0xaaaa);
@@ -95,29 +99,31 @@ static rt_uint8_t SectorErase(rt_uint32_t sector)
 }
 static rt_uint8_t BlockErase(rt_uint32_t block)
 {
-	//rt_kprintf("Erase Block 0x%x\n",block);
+	rt_hw_interrupt_mask(INT_GLOBAL);
 	outportw(0x00aa, ROM_BASE+0xaaaa);
 	outportw(0x0055, ROM_BASE+0x5554);
 	outportw(0x0080, ROM_BASE+0xaaaa);
 	outportw(0x00aa, ROM_BASE+0xaaaa);
 	outportw(0x0055, ROM_BASE+0x5554);
-	//rt_kprintf("Erase Block %d\n",block/(64*1024));
-	outportw(0x0050, ROM_BASE+block)*2;	
-	//rt_kprintf("Erase Block %d\n",block/(64*1024));
+	outportw(0x0050, ROM_BASE+block);	
 	return check_toggle_ready(ROM_BASE+block);
 }
 static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t WordCnt)
 {	
 
 	for( ; WordCnt; ProgStart+=2, DataPtr++, WordCnt--) {
-
+		rt_hw_interrupt_mask(INT_GLOBAL);
 		outportw(0xaaaa, ROM_BASE+0xaaaa);
 		outportw(0x5555, ROM_BASE+0x5554);
 		outportw(0xa0a0, ROM_BASE+0xaaaa);
 		outportw(*DataPtr, ROM_BASE+ProgStart);
         
-        if(check_toggle_ready(ROM_BASE+ProgStart)!=RT_EOK)
-            return -1;
+    if(check_toggle_ready(ROM_BASE+ProgStart)!=RT_EOK)
+    {
+    		rt_hw_interrupt_umask(INT_GLOBAL);
+        return -1;
+    }
+    rt_hw_interrupt_umask(INT_GLOBAL);
 
 		}
 	return 0;

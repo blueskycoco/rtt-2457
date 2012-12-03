@@ -30,7 +30,7 @@
 #define CYGOPT_FS_JFFS2_WRITE /* if not defined, jffs2 is read only*/
 
 /* jffs2 debug output opion */
-#define CONFIG_JFFS2_FS_DEBUG 		0  /* 1 or 2 */
+#define CONFIG_JFFS2_FS_DEBUG 		1  /* 1 or 2 */
 
 /* jffs2 gc thread section */
 //#define CYGOPT_FS_JFFS2_GCTHREAD
