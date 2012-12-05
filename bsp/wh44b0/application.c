@@ -22,10 +22,10 @@ void rt_led_thread_entry(void *parameter)
 	while (1)
 	{
 		/* light on leds for one second */
-		//rt_kprintf("Led on rom\n");
+	//	rt_kprintf("Led on rom\n");
 		rt_hw_led_set(0xff);
 		rt_thread_delay(1000);
-		//rt_kprintf("Led off rom\n");
+	//	rt_kprintf("Led off rom\n");
 		/* light off leds for one second */
 		rt_hw_led_set(0x00);
 		rt_thread_delay(1000);

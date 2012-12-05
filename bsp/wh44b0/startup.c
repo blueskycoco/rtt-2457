@@ -95,7 +95,7 @@ void rtthread_startup(void)
 
 #ifdef RT_USING_HOOK
 	/* set idle thread hook */
-	rt_thread_idle_sethook(rt_hw_led_flash);
+	//rt_thread_idle_sethook(rt_hw_led_flash);
 #endif
 #ifdef RT_USING_DFS
 #ifdef RT_USING_MTD_NOR
@@ -108,7 +108,7 @@ void rtthread_startup(void)
 	dfs_jffs2_init();
 	if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
   {
-      rt_kprintf("jffs2 initialized!\n");
+     rt_kprintf("jffs2 initialized!\n");
   }
   else
       rt_kprintf("jffs2 initialzation failed!\n");
