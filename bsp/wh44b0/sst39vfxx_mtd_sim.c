@@ -27,8 +27,8 @@
 #define SST39_MTD(device) 		((struct sst39_mtd*)(device))
 struct sst39_mtd
 {
-	struct rt_mtd_nor_device parent;
-	FILE * file;
+    struct rt_mtd_nor_device parent;
+    FILE * file;
 };
 static struct sst39_mtd _sst39_mtd;
 
@@ -40,15 +40,15 @@ static struct rt_mutex flash_lock;
 #define toogle_addr(r)	((r))
 static void SWPIDExit(void)
 {
-	outportw(0x00aa, ROM_BASE+0xaaaa);
-	outportw(0x0055, ROM_BASE+0x5554);
-	outportw(0x00f0, ROM_BASE+0xaaaa);
+    outportw(0x00aa, ROM_BASE+0xaaaa);
+    outportw(0x0055, ROM_BASE+0x5554);
+    outportw(0x00f0, ROM_BASE+0xaaaa);
 }
 static void SWPIDEntry(void)
 {
-	outportw(0x00aa, ROM_BASE+0xaaaa);
-	outportw(0x0055, ROM_BASE+0x5554);
-	outportw(0x0090, ROM_BASE+0xaaaa);
+    outportw(0x00aa, ROM_BASE+0xaaaa);
+    outportw(0x0055, ROM_BASE+0x5554);
+    outportw(0x0090, ROM_BASE+0xaaaa);
 }
 /* RT-Thread MTD device interface */
 static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
@@ -76,13 +76,13 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
 }
 static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 {
-	rt_uint32_t i;
+    rt_uint32_t i;
 
-	SWPIDEntry();
-	i  = inportw(ROM_BASE);
-	i |= inportw(ROM_BASE+2)<<16;
-	SWPIDExit();
-	return i;	
+    SWPIDEntry();
+    i  = inportw(ROM_BASE);
+    i |= inportw(ROM_BASE+2)<<16;
+    SWPIDExit();
+    return i;	
 }
 static rt_uint8_t SectorErase(rt_uint32_t sector)
 {
@@ -136,7 +136,7 @@ static int sst39vfxx_read(struct rt_mtd_nor_device* device, rt_off_t position, r
 }
 
 static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
-		const rt_uint8_t *data, rt_size_t size)
+        const rt_uint8_t *data, rt_size_t size)
 {
 	struct sst39_mtd *sst39;
 	int result;
@@ -206,82 +206,82 @@ static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_uint3
 
 const static struct rt_mtd_nor_driver_ops sst39vfxx_mtd_ops =
 {
-	sst39vfxx_read_id,
-	sst39vfxx_read,
-	sst39vfxx_write,
-	sst39vfxx_erase_block,
+    sst39vfxx_read_id,
+    sst39vfxx_read,
+    sst39vfxx_write,
+    sst39vfxx_erase_block,
 };
 static rt_err_t sst39vfxx_hw_init(struct sst39_mtd *mtd)
 {
-	mtd = mtd;
-	return RT_EOK;
+    mtd = mtd;
+    return RT_EOK;
 }
 
 /**
  * SST39vfxx API
  */
 rt_err_t sst39vfxx_mtd_init(const char * nor_name,
-		rt_uint32_t block_start,
-		rt_uint32_t block_end)
+        rt_uint32_t block_start,
+        rt_uint32_t block_end)
 {
-	rt_uint32_t id, total_block;
-	struct sst39_mtd * sst39;
-	struct rt_mtd_nor_device *mtd;
+    rt_uint32_t id, total_block;
+    struct sst39_mtd * sst39;
+    struct rt_mtd_nor_device *mtd;
 
-	sst39 = &_sst39_mtd;
-	mtd = &(sst39->parent);
+    sst39 = &_sst39_mtd;
+    mtd = &(sst39->parent);
 
-	/* set page size and block size */
-	mtd->block_size = 64 * 1024; /* 64kByte */
-	mtd->ops = &sst39vfxx_mtd_ops;
+    /* set page size and block size */
+    mtd->block_size = 64 * 1024; /* 64kByte */
+    mtd->ops = &sst39vfxx_mtd_ops;
 
-	/* initialize mutex */
-	if (rt_mutex_init(&flash_lock, nor_name, RT_IPC_FLAG_FIFO) != RT_EOK)
-	{
-		rt_kprintf("init sd lock mutex failed\n");
-	}
+    /* initialize mutex */
+    if (rt_mutex_init(&flash_lock, nor_name, RT_IPC_FLAG_FIFO) != RT_EOK)
+    {
+        rt_kprintf("init sd lock mutex failed\n");
+    }
 
-	/* initialize flash */
-	id = sst39vfxx_read_id(mtd);
-	rt_kprintf("sst39vfxx_mtd_init id %2x\n",id);
-	switch (id & 0xff)
-	{
-		case MC_ID_SST39VF016:
-			total_block = (16 * 1024 * 1024 / 8) / mtd->block_size;
-			break;
-		case MC_ID_SST39VF032:
-			total_block = (32 * 1024 * 1024 / 8) / mtd->block_size;
-			break;
-		case MC_ID_SST39VF064:
-			total_block = (64 * 1024 * 1024 / 8) / mtd->block_size;
-			break;
-		default:
-			rt_kprintf("SST39 detection error, id: %x\n", id);
-			return -RT_ERROR;
-	}
+    /* initialize flash */
+    id = sst39vfxx_read_id(mtd);
+    rt_kprintf("sst39vfxx_mtd_init id %2x\n",id);
+    switch (id & 0xff)
+    {
+        case MC_ID_SST39VF016:
+            total_block = (16 * 1024 * 1024 / 8) / mtd->block_size;
+            break;
+        case MC_ID_SST39VF032:
+            total_block = (32 * 1024 * 1024 / 8) / mtd->block_size;
+            break;
+        case MC_ID_SST39VF064:
+            total_block = (64 * 1024 * 1024 / 8) / mtd->block_size;
+            break;
+        default:
+            rt_kprintf("SST39 detection error, id: %x\n", id);
+            return -RT_ERROR;
+    }
 
-	if ((block_end == RT_UINT32_MAX) || (block_end == 0))
-	{
-		block_end = total_block;
-	}
-	else if (block_end > total_block)
-	{
-		rt_kprintf("SST39 total block: %d, out of block\n", total_block);
-		return -RT_ERROR;
-	}
+    if ((block_end == RT_UINT32_MAX) || (block_end == 0))
+    {
+        block_end = total_block;
+    }
+    else if (block_end > total_block)
+    {
+        rt_kprintf("SST39 total block: %d, out of block\n", total_block);
+        return -RT_ERROR;
+    }
 
-	mtd->block_start = block_start;
-	mtd->block_end   = block_end;
+    mtd->block_start = block_start;
+    mtd->block_end   = block_end;
 
 
 
-	/* initialize hardware */
-	sst39vfxx_hw_init(&_sst39_mtd);
+    /* initialize hardware */
+    sst39vfxx_hw_init(&_sst39_mtd);
 
-	/* register MTD device */
-	rt_mtd_nor_register_device("nor", mtd);
+    /* register MTD device */
+    rt_mtd_nor_register_device("nor", mtd);
 
-	return RT_EOK;
+    return RT_EOK;
 }
 
 #ifdef RT_USING_FINSH
@@ -332,14 +332,14 @@ void nor_write(const rt_uint32_t index,const rt_uint32_t index_end)
 FINSH_FUNCTION_EXPORT(nor_write, write block in SST39VF1601 flash);
 void nor_erase()
 {
-	rt_uint32_t index;
-	struct rt_mtd_nor_device *mtd;
+    rt_uint32_t index;
+    struct rt_mtd_nor_device *mtd;
 
-	mtd = SST39_MTD(&_sst39_mtd);
-	for (index = mtd->block_start; index < mtd->block_end; index ++)
-	{
-		sst39vfxx_erase_block(mtd, index * mtd->block_size);
-	}
+    mtd = SST39_MTD(&_sst39_mtd);
+    for (index = mtd->block_start; index < mtd->block_end; index ++)
+    {
+        sst39vfxx_erase_block(mtd, index * mtd->block_size);
+    }
 }
 FINSH_FUNCTION_EXPORT(nor_erase, erase block in SST39VF1601 flash);
 #endif
