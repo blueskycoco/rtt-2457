@@ -143,6 +143,7 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 	rt_uint8_t *buf=rt_malloc(0x1000);
 	rt_uint32_t  tmp = 0x1000-(position&0xfff);
 	rt_uint16_t err;
+	rt_uint32_t bak_size=size;
 	sst39 = SST39_MTD(device);
 	RT_ASSERT(sst39 != RT_NULL);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
@@ -169,10 +170,12 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 			rt_hw_interrupt_umask(INT_GLOBAL);
 			rt_mutex_release(&flash_lock);
 			rt_free(buf);
+			rt_kprintf("write nor failed\n");
 			return -1;
 		}
-
-		rt_kprintf("Program 0x%x %s\n", position&~0xfff, FlashProg(toogle_addr(position&~0xfff), (rt_uint16_t *)buf, 0x1000>>1)?"\tFail!!! Error!!!":"Ok");
+		
+		FlashProg(toogle_addr(position&~0xfff), (rt_uint16_t *)buf, 0x1000>>1);
+		//rt_kprintf("Program 0x%x %s\n", position&~0xfff, FlashProg(toogle_addr(position&~0xfff), (rt_uint16_t *)buf, 0x1000>>1)?"\tFail!!! Error!!!":"Ok");
 
 		size -= tmp;
 		position  += tmp;
@@ -182,7 +185,7 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 	rt_hw_interrupt_umask(INT_GLOBAL);
 	rt_mutex_release(&flash_lock);
 	rt_free(buf);
-	return size;
+	return bak_size;
 }
 
 static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_uint32_t block)
@@ -283,7 +286,7 @@ rt_err_t sst39vfxx_mtd_init(const char * nor_name,
 
 #ifdef RT_USING_FINSH
 #include <finsh.h>
-void nor_read(const rt_uint32_t index)
+void nor_read(const rt_uint32_t index,const rt_uint32_t index_end)
 {
 	rt_uint8_t *buf,*buf1;
 	rt_uint32_t i,j;
@@ -295,18 +298,20 @@ void nor_read(const rt_uint32_t index)
 	if(buf == RT_NULL)
 		rt_kprintf("alloc buffer failed\n");
 	mtd = SST39_MTD(&_sst39_mtd);
-
-	sst39vfxx_read(mtd, index * mtd->block_size,buf1,0x10000);
+	for(i=index;i<=index_end;i++)
+	{
+		sst39vfxx_read(mtd, i * mtd->block_size,buf1,0x10000);
 		for(j=0;j<0x10000;j++)
 		{
 			if(buf1[j]!=buf[j])
 			rt_kprintf("%d,is different from write (R %x,W %x)\n",j,buf1[j],buf[j]);
 		}
+	}
 	rt_free(buf);
 	rt_free(buf1);
 }
 FINSH_FUNCTION_EXPORT(nor_read, write block in SST39VF1601 flash);
-void nor_write(const rt_uint32_t index)
+void nor_write(const rt_uint32_t index,const rt_uint32_t index_end)
 {
 	//rt_uint32_t index;
 	rt_uint8_t *buf;
@@ -316,10 +321,12 @@ void nor_write(const rt_uint32_t index)
 	for(i=0;i<0x10000;i++)
 		buf[i]=i;
 	mtd = SST39_MTD(&_sst39_mtd);
-	//for (index = mtd->block_start; index < mtd->block_end; index ++)
-	//{
-	sst39vfxx_write(mtd, index * mtd->block_size,buf,0x10000);
-	//}
+	for (i=index; i <= index_end; i++)
+	{
+		rt_uint32_t len = sst39vfxx_write(mtd, i * mtd->block_size,buf,0x10000);
+		if(len!=0x10000)
+		rt_kprintf("nor_write test failed %x\n",len);
+	}
 	rt_free(buf);
 }
 FINSH_FUNCTION_EXPORT(nor_write, write block in SST39VF1601 flash);

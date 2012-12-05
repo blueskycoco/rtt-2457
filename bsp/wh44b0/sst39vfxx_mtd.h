@@ -21,7 +21,4 @@
 
 rt_err_t sst39vfxx_mtd_init(const char *spi_device_name, rt_uint32_t block_start, rt_uint32_t block_end);
 
-void nor_erase();
-void nor_read(const rt_uint32_t index);
-void nor_write(const rt_uint32_t index);
 #endif

@@ -395,7 +395,7 @@ void jffs2_mark_node_obsolete(struct jffs2_sb_info *c, struct jffs2_raw_node_ref
 		D1(printk(KERN_DEBUG "jffs2_mark_node_obsolete called with already obsolete node at 0x%08x\n", ref_offset(ref)));
 		return;
 	}
-	blocknr = ref->flash_offset / c->sector_size;
+	blocknr = ref->flash_offset / c->sector_size - 3;
 	if (blocknr >= c->nr_blocks) {
 		printk(KERN_NOTICE "raw node at 0x%08x is off the end of device!\n", ref->flash_offset);
 		BUG();

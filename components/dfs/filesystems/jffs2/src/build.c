@@ -325,9 +325,13 @@ int jffs2_do_mount_fs(struct jffs2_sb_info *c)
 		c->blocks = kmalloc(sizeof(struct jffs2_eraseblock) * c->nr_blocks, GFP_KERNEL);
 	if (!c->blocks)
 		return -ENOMEM;
+	//struct super_block *sb = OFNI_BS_2SFFJ(c);
+	//struct rt_mtd_nor_device *device=RT_MTD_NOR_DEVICE(sb->s_dev);
+	//rt_uint32_t start_block = device->block_start;
+	//rt_kprintf("start_block is %x\n",start_block);
 	for (i=0; i<c->nr_blocks; i++) {
 		INIT_LIST_HEAD(&c->blocks[i].list);
-		c->blocks[i].offset = i * c->sector_size;
+		c->blocks[i].offset = (i+3) * c->sector_size;
 		c->blocks[i].free_size = c->sector_size;
 		c->blocks[i].dirty_size = 0;
 		c->blocks[i].wasted_size = 0;

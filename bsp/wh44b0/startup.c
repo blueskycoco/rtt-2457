@@ -106,12 +106,6 @@ void rtthread_startup(void)
 //	libc_system_init("uart1");
 	dfs_init();
 	dfs_jffs2_init();
-	if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
-  {
-     rt_kprintf("jffs2 initialized!\n");
-  }
-  else
-      rt_kprintf("jffs2 initialzation failed!\n");
 #endif
 #ifdef RT_USING_DEVICE
 	/* register uart0 */
@@ -146,6 +140,12 @@ void rtthread_startup(void)
 
 	/* unmask interrupt */
 	rt_hw_interrupt_umask(INT_GLOBAL);
+	if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
+  {
+     rt_kprintf("jffs2 initialized!\n");
+  }
+  else
+      rt_kprintf("jffs2 initialzation failed!\n");
 	rt_kprintf("init finish1\n");
 	/* start scheduler */
 	rt_system_scheduler_start();
