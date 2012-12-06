@@ -38,6 +38,7 @@ static struct rt_mutex flash_lock;
 #define inportw(r) 		(*(volatile rt_uint16_t *)(r))
 #define outportw(r, d) 	(*(volatile rt_uint16_t *)(d) = r)
 #define toogle_addr(r)	((r))
+rt_base_t	baset;
 static void SWPIDExit(void)
 {
     outportw(0x00aa, ROM_BASE+0xaaaa);
@@ -64,6 +65,7 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
 		CurrData = CurrData & 0x0040;
 		if(CurrData == PreData)
 		{
+			rt_hw_interrupt_enable(baset);
 			return RT_EOK;
 		}
 		else
@@ -72,6 +74,7 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
 			TimeOut++;
 		}
 	}
+	rt_hw_interrupt_enable(baset);
 	return -1;
 }
 static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
@@ -86,6 +89,7 @@ static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 }
 static rt_uint8_t SectorErase(rt_uint32_t sector)
 {
+	baset=rt_hw_interrupt_disable();
 	outportw(0xaaaa, ROM_BASE+0xaaaa);
 	outportw(0x5555, ROM_BASE+0x5554);
 	outportw(0x8080, ROM_BASE+0xaaaa);
@@ -96,6 +100,7 @@ static rt_uint8_t SectorErase(rt_uint32_t sector)
 }
 static rt_uint8_t BlockErase(rt_uint32_t block)
 {
+	baset=rt_hw_interrupt_disable();
 	outportw(0x00aa, ROM_BASE+0xaaaa);
 	outportw(0x0055, ROM_BASE+0x5554);
 	outportw(0x0080, ROM_BASE+0xaaaa);
@@ -109,6 +114,7 @@ static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t Wo
 {	
 
 	for( ; WordCnt; ProgStart+=2, DataPtr++, WordCnt--) {
+		baset=rt_hw_interrupt_disable();
 		outportw(0xaaaa, ROM_BASE+0xaaaa);
 		outportw(0x5555, ROM_BASE+0x5554);
 		outportw(0xa0a0, ROM_BASE+0xaaaa);
@@ -148,7 +154,6 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 	sst39 = SST39_MTD(device);
 	RT_ASSERT(sst39 != RT_NULL);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
-	rt_hw_interrupt_mask(INT_GLOBAL);
 	if(tmp>size)
 		tmp = size;
 	if(tmp&1)
@@ -168,10 +173,9 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 		if(err) 
 		{	//4K Bytes boudary
 
-			rt_hw_interrupt_umask(INT_GLOBAL);
 			rt_mutex_release(&flash_lock);
 			rt_free(buf);
-			rt_kprintf("write nor failed\n");
+			rt_kprintf("write n1or failed\n");
 			return -1;
 		}
 		
@@ -183,7 +187,6 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 		data  += tmp;
 		tmp   = (size>0x1000)?0x1000:size;
 	}	
-	rt_hw_interrupt_umask(INT_GLOBAL);
 	rt_mutex_release(&flash_lock);
 	rt_free(buf);
 	return bak_size;
@@ -198,9 +201,7 @@ static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_uint3
 
 	RT_ASSERT(sst39 != RT_NULL);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
-	rt_hw_interrupt_mask(INT_GLOBAL);
 	result=BlockErase(toogle_addr(block+3*64*1024));
-	rt_hw_interrupt_umask(INT_GLOBAL);
 	rt_mutex_release(&flash_lock);
 	return result;
 }
