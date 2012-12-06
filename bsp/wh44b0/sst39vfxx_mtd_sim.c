@@ -331,15 +331,15 @@ void nor_write(const rt_uint32_t index,const rt_uint32_t index_end)
 	rt_free(buf);
 }
 FINSH_FUNCTION_EXPORT(nor_write, write block in SST39VF1601 flash);
-void nor_erase()
+void nor_erase(const rt_uint32_t index,const rt_uint32_t index_end)
 {
-    rt_uint32_t index;
+    rt_uint32_t i;
     struct rt_mtd_nor_device *mtd;
 
     mtd = SST39_MTD(&_sst39_mtd);
-    for (index = mtd->block_start; index < mtd->block_end; index ++)
+    for (i = index; i <= index_end; i ++)
     {
-        sst39vfxx_erase_block(mtd, index * mtd->block_size);
+        sst39vfxx_erase_block(mtd, i * mtd->block_size);
     }
 }
 FINSH_FUNCTION_EXPORT(nor_erase, erase block in SST39VF1601 flash);
