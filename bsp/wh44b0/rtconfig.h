@@ -25,6 +25,8 @@
 #define RT_USING_DFS_JFFS2
 #define RT_USING_DFS
 #define RT_USING_DFS_DEVFS
+#define RT_USING_DFS_ROMFS
+#define RT_USING_DFS_UFFS
 /* the max number of mounted filesystem */
 #define DFS_FILESYSTEMS_MAX			4
 /* the max number of opened files 		*/

@@ -136,7 +136,7 @@ static int sst39vfxx_read(struct rt_mtd_nor_device* device, rt_off_t position, r
 	sst39 = SST39_MTD(device);
 	RT_ASSERT(sst39 != RT_NULL);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
-	rt_memcpy(data, (rt_uint8_t *)(toogle_addr(position+3*64*1024)), size);
+	rt_memcpy(data, (rt_uint8_t *)(toogle_addr(position+10*64*1024)), size);
 	rt_mutex_release(&flash_lock);
 	return size;
 }
@@ -147,7 +147,7 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 	struct sst39_mtd *sst39;
 	int result;
 	rt_uint8_t *buf=rt_malloc(0x1000);
-	position = position + 3*64*1024;
+	position = position + 10*64*1024;
 	rt_uint32_t  tmp = 0x1000-(position&0xfff);
 	rt_uint16_t err;
 	rt_uint32_t bak_size=size;
@@ -201,7 +201,7 @@ static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_uint3
 
 	RT_ASSERT(sst39 != RT_NULL);
 	rt_mutex_take(&flash_lock, RT_WAITING_FOREVER);
-	result=BlockErase(toogle_addr(block+3*64*1024));
+	result=BlockErase(toogle_addr(block+10*64*1024));
 	rt_mutex_release(&flash_lock);
 	return result;
 }

@@ -94,6 +94,7 @@ static rt_err_t k9f2808_mtd_check_block(
 	status = NF_RDDATA8();
 	NF_CMD(CMD_READ);
 	NF_CE_H();
+	//rt_kprintf("k9f2808_mtd_check_block %d %x\n",block,status);
 	/* TODO: more check about status */
 	return status == 0xFF ? RT_EOK : -RT_ERROR;
 
@@ -126,6 +127,7 @@ static rt_err_t k9f2808_mtd_mark_bad_block(
 		result = -RT_ERROR;
 	NF_CMD(CMD_READ);
 	NF_CE_H(); /* disable chip select */
+	//rt_kprintf("k9f2808_mtd_mark_bad_block %d\n",block);
     return result;
 }
 
@@ -155,6 +157,7 @@ static rt_err_t k9f2808_mtd_erase_block(
 
 	NF_CE_H();
 	rt_mutex_release(&nand);
+	//rt_kprintf("k9f2808_mtd_erase_block %d\n",block);
 	return result;
 
 }
@@ -212,7 +215,8 @@ static rt_err_t k9f2808_mtd_read(
 	}
 	NF_CE_H();
 	rt_mutex_release(&nand);
-
+	//for(i=0;i<spare_len;i++)
+	//rt_kprintf("k9f2808_mtd_read %d\n",spare[i]);
 	/* TODO: more check about status */
 	return result;
 }
@@ -267,6 +271,8 @@ static rt_err_t k9f2808_mtd_write (
 __ret:
 	NF_CE_H(); /* disable chip */
 	rt_mutex_release(&nand);
+	//for(i=0;i<spare_len;i++)
+	//rt_kprintf("k9f2808_mtd_write %d\n",spare[i]);
 	return result;
 }
 
@@ -311,7 +317,7 @@ void k9f2808_mtd_init()
 	}
 	/* the first partition of nand */
 	nand_part[0].page_size = PAGE_DATA_SIZE;
-	nand_part[0].block_size = PAGE_DATA_SIZE*32;//don't caculate oob size
+	nand_part[0].pages_per_block = 32;//don't caculate oob size
 	nand_part[0].block_start = 0;
 	nand_part[0].block_end = 255;
 	nand_part[0].oob_size = 16;
@@ -320,7 +326,7 @@ void k9f2808_mtd_init()
 
 	/* the second partition of nand */
 	nand_part[1].page_size = PAGE_DATA_SIZE;
-	nand_part[1].block_size = PAGE_DATA_SIZE*32;//don't caculate oob size
+	nand_part[0].pages_per_block = 32;//don't caculate oob size
 	nand_part[1].block_start = 256;
 	nand_part[1].block_end = 512-1;
 	nand_part[1].oob_size = 16;
@@ -329,7 +335,7 @@ void k9f2808_mtd_init()
 
 	/* the third partition of nand */
 	nand_part[2].page_size = PAGE_DATA_SIZE;
-	nand_part[2].block_size = PAGE_DATA_SIZE*32;//don't caculate oob size
+	nand_part[0].pages_per_block = 32;//don't caculate oob size
 	nand_part[2].block_start = 512;
 	nand_part[2].block_end = 512+256-1;
 	nand_part[2].oob_size = 16;
@@ -338,7 +344,7 @@ void k9f2808_mtd_init()
 
 	/* the 4th partition of nand */
 	nand_part[3].page_size = PAGE_DATA_SIZE;
-	nand_part[3].block_size = PAGE_DATA_SIZE*32;//don't caculate oob size
+	nand_part[0].pages_per_block = 32;//don't caculate oob size
 	nand_part[3].block_start = 512+256;
 	nand_part[3].block_end = 1024-1;
 	nand_part[3].oob_size = 16;

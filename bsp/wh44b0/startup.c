@@ -18,6 +18,12 @@
 
 #include <s3c44b0.h>
 #include <board.h>
+#include <dfs_init.h>
+#include <dfs_fs.h>
+#include <dfs_uffs.h>
+#ifdef RT_USING_DFS_ROMFS
+#include <dfs_romfs.h>
+#endif
 #if defined(__CC_ARM)
 	extern int Image$$ER_ZI$$ZI$$Base;
 	extern int Image$$ER_ZI$$ZI$$Length;
@@ -99,7 +105,7 @@ void rtthread_startup(void)
 #endif
 #ifdef RT_USING_DFS
 #ifdef RT_USING_MTD_NOR
-       sst39vfxx_mtd_init("nor", 3, 20);
+       sst39vfxx_mtd_init("nor", 10, 30);
 #endif
 #ifdef RT_USING_MTD_NAND
 	k9f2808_mtd_init();
@@ -109,6 +115,9 @@ void rtthread_startup(void)
 //	libc_system_init("uart1");
 	dfs_init();
 	dfs_jffs2_init();
+	dfs_romfs_init();
+	devfs_init();
+	dfs_uffs_init();
 #endif
 #ifdef RT_USING_DEVICE
 	/* register uart0 */
@@ -149,6 +158,25 @@ void rtthread_startup(void)
   }
   else
       rt_kprintf("jffs2 initialzation failed!\n");
+  if (dfs_mount(RT_NULL, "/dev", "devfs", 0, 0) == 0)
+  {
+     rt_kprintf("devfs initialized!\n");
+  }
+  else
+      rt_kprintf("devfs initialzation failed!\n");
+      libc_system_init("uart0");
+      if (dfs_mount(RT_NULL, "/rom", "rom", 0, &romfs_root) == 0)
+  {
+     rt_kprintf("romfs initialized!\n");
+  }
+  else
+      rt_kprintf("romfs initialzation failed!\n");
+       if (dfs_mount("nand0", "/nand0", "uffs", 0, 0) == 0)
+  {
+     rt_kprintf("uffs initialized!\n");
+  }
+  else
+      rt_kprintf("uffs initialzation failed!\n");
 	rt_kprintf("init finish1\n");
 	/* start scheduler */
 	rt_system_scheduler_start();
