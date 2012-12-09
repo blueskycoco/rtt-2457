@@ -2,7 +2,7 @@ import rtconfig
 Import('RTT_ROOT')
 from building import *
 
-src_bsp = ['application.c', 'startup.c', 'board.c', 'lowlevel.S','console.c','sst39vfxx_mtd_sim.c']
+src_bsp = ['application.c', 'startup.c', 'board.c', 'lowlevel.S','console.c','sst39vfxx_mtd_sim.c','k9f2808_mtd.c']
 src	= File(src_bsp)
 if GetDepend('RT_USING_DFS') == False:
     SrcRemove(src, 'sst39vfxx_mtd_sim.c')

@@ -100,6 +100,9 @@ void rtthread_startup(void)
 #ifdef RT_USING_DFS
 #ifdef RT_USING_MTD_NOR
        sst39vfxx_mtd_init("nor", 3, 20);
+#endif
+#ifdef RT_USING_MTD_NAND
+	k9f2808_mtd_init();
 #endif 
 //	dfs_jffs2_init();
 //	devfs_init();

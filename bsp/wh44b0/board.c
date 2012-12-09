@@ -150,7 +150,7 @@ void rt_hw_port_init(void)
 	/* NC		NC		NC		NC		NFALE 	NFCLE 	NFCE 	NFRB*/
 	/* 01		01		01		01		01		01		01		00	*/
 	PDATC = 0x0100;	/* All IO is low */
-	PCONC = 0xfff5ff54;
+	PCONC = 0xfff4ff54;
 	PUPC  = 0x0000;	/* PULL UP RESISTOR should be enabled to I/O */
 
 	/* PORT D GROUP */

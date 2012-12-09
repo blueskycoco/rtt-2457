@@ -21,6 +21,7 @@
 /* #define RT_THREAD_DEBUG */
 //#define DFS_DEBUG 1
 #define RT_USING_MTD_NOR
+#define RT_USING_MTD_NAND
 #define RT_USING_DFS_JFFS2
 #define RT_USING_DFS
 #define RT_USING_DFS_DEVFS
