@@ -1,3 +1,4 @@
+components/dfs/filesystems/romfs/romfs_bak.c
 bsp/wh44b0/sst39vfxx_mtd_sim-bak.c
 bsp/wh44b0/.sconsign.dblite
 bsp/wh44b0/build/

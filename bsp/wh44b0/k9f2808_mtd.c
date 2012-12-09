@@ -38,7 +38,7 @@
 #define NF_WRDATA(data)		{*(volatile rt_uint8_t *)0x02000000 = (data); }
 #define NF_WRDATA8(data)	{*(volatile rt_uint8_t *)0x02000000 = (data); } 
 #define NF_WAITRB()			{while(!(PDATC&(1<<8)));} 
-#define NF_DETECT_RB()		{while(!(PDATC&(1<<8)));}
+//#define NF_DETECT_RB()		{while(!(PDATC&(1<<8)));}
 
 /* HCLK=100Mhz, TACLS + TWRPH0 + TWRPH1 >= 50ns */
 #define TACLS				1       // 1-clock(0ns)
@@ -55,6 +55,18 @@
 #define BLOCK_MARK_SPARE_OFFSET         4
 //#define CONFIG_USE_HW_ECC
 static struct rt_mutex nand;
+rt_uint32_t NF_DETECT_RB(void)
+{
+	rt_uint8_t stat;
+	
+	NF_CMD(CMD_STATUS);
+	do {
+		stat = NF_RDDATA();
+		//printf("%x\n", stat);
+	}while(!(stat&0x40));
+	NF_CMD(CMD_READ);
+	return stat&1;
+}
 /*
  * In a page, data's ecc code is stored in spare area, from BYTE 0 to BYTEE 3.
  * Block's status byte which indicate a block is bad or not is BYTE4.
@@ -203,14 +215,14 @@ static rt_err_t k9f2808_mtd_read(
 		NF_ADDR(0);
 		NF_ADDR((page) & 0xff);
 		NF_ADDR((page >> 8) & 0xff);
-		NF_ADDR((page >> 16) & 0xff);
+		//NF_ADDR((page >> 16) & 0xff);
 
 		NF_DETECT_RB();/* wait for ready bit */
 		/*TODO: use a more quick method */
 		for (i = 0; i < spare_len; i++)
 			spare[i] = NF_RDDATA8();
 
-	//	NF_CMD(CMD_READ);
+		//NF_CMD(CMD_READ);
 		result = RT_EOK;
 	}
 	NF_CE_H();
@@ -241,7 +253,7 @@ static rt_err_t k9f2808_mtd_write (
 		NF_CMD(CMD_WRITE1);
 
 		NF_ADDR(0);
-		NF_ADDR( page & 0xff);
+		NF_ADDR( (page) & 0xff);
 		NF_ADDR((page >> 8) & 0xff);
 
 		for(i=0; i<PAGE_DATA_SIZE; i++)
@@ -258,13 +270,14 @@ static rt_err_t k9f2808_mtd_write (
 		NF_CMD(CMD_WRITE1);
 
 		NF_ADDR(0);
-		NF_ADDR( page & 0xff);
+		NF_ADDR( (page )& 0xff);
 		NF_ADDR((page >> 8) & 0xff);
 
 		for(i=0; i<spare_len; i++)
 			NF_WRDATA8(spare[i]);
 
 		NF_CMD(CMD_WRITE2);
+		//NF_CMD(CMD_READ);
 		NF_DETECT_RB();
 	}
 
@@ -284,7 +297,7 @@ static rt_err_t k9f2808_read_id(
 	NF_CE_L();
 	NF_CMD(CMD_READID);
 	NF_ADDR(0);
-	NF_DETECT_RB();
+	NF_WAITRB();
 	id  = NF_RDDATA8()<<8;
 	id |= NF_RDDATA8();
 	NF_CE_H();
@@ -354,11 +367,14 @@ void k9f2808_mtd_init()
 
 #include "finsh.h"
 static char buf[PAGE_DATA_SIZE+16];
+static char buf1[PAGE_DATA_SIZE+16];
 static char spare[16];
-
+static char spare1[16];
+static int flag;
 void nand_erase(int start, int end)
 {
 	int page;
+	flag=1;
 	for(; start <= end; start ++)
 	{
 		page = start * 32;
@@ -391,33 +407,60 @@ int nand_read(int page)
 
 //	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 64);
 	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE+16, RT_NULL, 0);
-	rt_kprintf("block=%d, page=%d\n", page/16, page%16);
+	//rt_kprintf("block=%d, page=%d\n", page/32, page%32);
 	for(i=0; i<PAGE_DATA_SIZE; i++)
 	{
-		rt_kprintf("%02x ", buf[i]);
-		if((i+1)%16 == 0)
-			rt_kprintf("\n");
+		//rt_kprintf("%02x ", buf[i]);
+		//if((i+1)%16 == 0)
+		//	rt_kprintf("\n");
+			if(flag==0)
+			{
+				if(buf[i]!=buf1[i])
+					rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(buf[i]!=0xff)
+					rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
+			}
 	}
 
-	rt_kprintf("spare:\n");
+	//rt_kprintf("spare:\n");
 	for(i=0; i<16; i++)
 	{
 //		rt_kprintf("%02x ", spare[i]);
-		rt_kprintf("%02x ", buf[512+i]);
-		if((i+1)%8 == 0)
-			rt_kprintf("\n");
+		//rt_kprintf("%02x ", buf[512+i]);
+		//if((i+1)%8 == 0)
+			//rt_kprintf("\n");
+			if(flag==0)
+			{
+				if(buf[512+i]!=spare1[i])
+					rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(buf[512+i]!=0xff)
+					rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
+			}
 	}
 	return res;
 }
-int nand_write(int page)
+int nand_write(int start,int end)
 {
 	int i;
 	rt_memset(buf, 0, PAGE_DATA_SIZE);
 	for(i=0; i<PAGE_DATA_SIZE; i++)
-		buf[i] = (i % 2) + i / 2;
+		{
+			buf[i] = (i % 2) + i / 2;
+			buf1[i] = buf[i];
+		}
 	for(i=0;i<16;i++)
-		spare[i]=i;
-	return k9f2808_mtd_write(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 16);
+		{
+			spare[i]=i;
+			spare1[i]=i;
+		}
+		flag=0;
+		for(;start<end;start++)		
+		  for(i=0;i<32;i++)
+			k9f2808_mtd_write(RT_NULL, start*32+i, buf, PAGE_DATA_SIZE, spare, 16);
 }
 
 int nand_read2(int page)
@@ -427,22 +470,40 @@ int nand_read2(int page)
 	rt_memset(buf, 0, sizeof(buf));
 
 	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, RT_NULL, 0);
-	rt_kprintf("block=%d, page=%d\n", page/32, page%32);
+	//rt_kprintf("block=%d, page=%d\n", page/32, page%32);
 	for(i=0; i<PAGE_DATA_SIZE; i++)
 	{
-		rt_kprintf("%02x ", buf[i]);
-		if((i+1)%16 == 0)
-			rt_kprintf("\n");
+		//rt_kprintf("%02x ", buf[i]);
+		//if((i+1)%16 == 0)
+			//rt_kprintf("\n");
+			if(flag==0)
+			{
+				if(buf[i]!=buf1[i])
+					rt_kprintf("nand_read2 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(buf[i]!=0xff)
+					rt_kprintf("nand_read2 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
+			}
 	}
 
 	rt_memset(spare, 0, 16);
 	res = k9f2808_mtd_read(RT_NULL, page, RT_NULL, 0, spare, 16);
-	rt_kprintf("spare:\n");
+	//rt_kprintf("spare:\n");
 	for(i=0; i<16; i++)
 	{
-		rt_kprintf("%02x ", spare[i]);
-		if((i+1)%8 == 0)
-			rt_kprintf("\n");
+		//rt_kprintf("%02x ", spare[i]);
+		//if((i+1)%8 == 0)
+		//	rt_kprintf("\n");
+		if(flag==0)
+			{
+				if(spare[i]!=spare1[i])
+					rt_kprintf("nand_read2 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(spare[i]!=0xff)
+					rt_kprintf("nand_read2 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
+			}
 	}
 	return res;
 }
@@ -454,30 +515,62 @@ int nand_read3(int page)
 	rt_memset(spare, 0, 16);
 
 	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 16);
-	rt_kprintf("block=%d, page=%d\n", page/32, page%32);
+	//rt_kprintf("block=%d, page=%d\n", page/32, page%32);
 	for(i=0; i<PAGE_DATA_SIZE; i++)
 	{
-		rt_kprintf("%02x ", buf[i]);
-		if((i+1)%16 == 0)
-			rt_kprintf("\n");
+		//rt_kprintf("%02x ", buf[i]);
+		//if((i+1)%16 == 0)
+		//	rt_kprintf("\n");
+		if(flag==0)
+			{
+				if(buf[i]!=buf1[i])
+					rt_kprintf("nand_read3 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(buf[i]!=0xff)
+					rt_kprintf("nand_read3 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
+			}
 	}
 
-	rt_kprintf("spare:\n");
+	//rt_kprintf("spare:\n");
 	for(i=0; i<16; i++)
 	{
-		rt_kprintf("%02x ", spare[i]);
-		if((i+1)%8 == 0)
-			rt_kprintf("\n");
+		//rt_kprintf("%02x ", spare[i]);
+		//if((i+1)%8 == 0)
+		//	rt_kprintf("\n");
+		if(flag==0)
+			{
+				if(spare[i]!=spare1[i])
+					rt_kprintf("nand_read3 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(spare[i]!=0xff)
+					rt_kprintf("nand_read3 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
+			}
 	}
 	return res;
 }
-
+void nand_readt(int start, int end)
+{
+	int page,i;
+	for(; start <= end; start ++)
+	{
+		page = start * 32;
+		rt_memset(buf, 0, PAGE_DATA_SIZE+16);
+		rt_memset(spare, 0, 16);
+		for(i=0;i<32;i++){
+		nand_read(page+i);
+		nand_read2(page+i);
+		nand_read3(page+i);
+	}
+	}
+}
 int nand_check(int block)
 {
 	if ( k9f2808_mtd_check_block(RT_NULL, block) != RT_EOK)
 		rt_kprintf("block %d is bad\n", block);
-	else
-		rt_kprintf("block %d is good\n", block);
+	//else
+	//	rt_kprintf("block %d is good\n", block);
 }
 
 int nand_mark(int block)
@@ -488,11 +581,19 @@ void nand_id(void)
 {
 	k9f2808_read_id(NULL);
 }
+void nand_checkt(void)
+{
+	int i;
+	for(i=0;i<1024;i++)
+	nand_check(i);
+}
 FINSH_FUNCTION_EXPORT(nand_id, nand_read_id);
-FINSH_FUNCTION_EXPORT(nand_read, nand_read(1).);
+FINSH_FUNCTION_EXPORT(nand_read, nand_read(0).);
 FINSH_FUNCTION_EXPORT(nand_read2, nand_read(1).);
 FINSH_FUNCTION_EXPORT(nand_read3, nand_read(1).);
-FINSH_FUNCTION_EXPORT(nand_write, nand_write(1).);
+FINSH_FUNCTION_EXPORT(nand_write, nand_write(0).);
 FINSH_FUNCTION_EXPORT(nand_check, nand_check(1).);
+FINSH_FUNCTION_EXPORT(nand_checkt, nand_check(1).);
 FINSH_FUNCTION_EXPORT(nand_mark, nand_mark(1).);
-FINSH_FUNCTION_EXPORT(nand_erase, nand_erase(100, 200). erase block in nand);
+FINSH_FUNCTION_EXPORT(nand_erase, nand_erase(0, 1024). erase block in nand);
+FINSH_FUNCTION_EXPORT(nand_readt, nand_erase(0, 1024). erase block in nand);
