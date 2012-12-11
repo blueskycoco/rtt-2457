@@ -77,7 +77,7 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
 	rt_hw_interrupt_enable(baset);
 	return -1;
 }
-static rt_uint32_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
+static rt_err_t sst39vfxx_read_id(struct rt_mtd_nor_device* device)
 {
     rt_uint32_t i;
 
@@ -128,7 +128,7 @@ static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t Wo
 	}
 	return 0;
 }
-static int sst39vfxx_read(struct rt_mtd_nor_device* device, rt_off_t position, rt_uint8_t *data, rt_size_t size)
+static rt_size_t sst39vfxx_read(struct rt_mtd_nor_device* device, rt_off_t position, rt_uint8_t *data, rt_size_t size)
 {
 	struct sst39_mtd *sst39;
 	int result;
@@ -141,12 +141,12 @@ static int sst39vfxx_read(struct rt_mtd_nor_device* device, rt_off_t position, r
 	return size;
 }
 
-static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
+static rt_size_t sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
         const rt_uint8_t *data, rt_size_t size)
 {
 	struct sst39_mtd *sst39;
 	int result;
-	rt_uint8_t *buf=rt_malloc(0x1000);
+	rt_uint8_t *buf=(rt_uint8_t *)rt_malloc(0x1000);
 	position = position + 10*64*1024;
 	rt_uint32_t  tmp = 0x1000-(position&0xfff);
 	rt_uint16_t err;
@@ -192,7 +192,7 @@ static int sst39vfxx_write(struct rt_mtd_nor_device* device, rt_off_t position,
 	return bak_size;
 }
 
-static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_uint32_t block)
+static rt_err_t sst39vfxx_erase_block(struct rt_mtd_nor_device* device, rt_off_t block, rt_uint32_t length)
 {
 	struct sst39_mtd *sst39;
 	int result,i;
@@ -319,7 +319,7 @@ void nor_write(const rt_uint32_t index,const rt_uint32_t index_end)
 	rt_uint8_t *buf;
 	rt_uint32_t i;
 	struct rt_mtd_nor_device *mtd;
-	buf=rt_malloc(0x10000);
+	buf=(rt_uint8_t *)rt_malloc(0x10000);
 	for(i=0;i<0x10000;i++)
 		buf[i]=i;
 	mtd = SST39_MTD(&_sst39_mtd);
@@ -340,7 +340,7 @@ void nor_erase(const rt_uint32_t index,const rt_uint32_t index_end)
     mtd = SST39_MTD(&_sst39_mtd);
     for (i = index; i <= index_end; i ++)
     {
-        sst39vfxx_erase_block(mtd, i * mtd->block_size);
+        sst39vfxx_erase_block(mtd, i * mtd->block_size,0);
     }
 }
 FINSH_FUNCTION_EXPORT(nor_erase, erase block in SST39VF1601 flash);

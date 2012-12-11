@@ -11,6 +11,7 @@
  * Date           Author       Notes
  * 2011-10-13     prife        the first version 
  * 2012-03-11     prife        use mtd device interface
+ * 2012-12-11	 bbstr	  add sst39vf10601 1.2Mbyte managed by uffs together
 */
 
 #include <rtdevice.h>
@@ -38,23 +39,248 @@
 #define NF_WRDATA(data)		{*(volatile rt_uint8_t *)0x02000000 = (data); }
 #define NF_WRDATA8(data)	{*(volatile rt_uint8_t *)0x02000000 = (data); } 
 #define NF_WAITRB()			{while(!(PDATC&(1<<8)));} 
-//#define NF_DETECT_RB()		{while(!(PDATC&(1<<8)));}
-
-/* HCLK=100Mhz, TACLS + TWRPH0 + TWRPH1 >= 50ns */
-#define TACLS				1       // 1-clock(0ns)
-#define TWRPH0				4       // 3-clock(25ns)
-#define TWRPH1				0       // 1-clock(10ns)
-
-/* status bit pattern */
 #define STATUS_READY        0x40    // ready
 #define STATUS_ERROR        0x01    // error
 #define	STATUS_ILLACC       0x08    // illegal access
+#define NAND_END_BLOCK 1024
 
 /* configurations */
 #define PAGE_DATA_SIZE                  512
 #define BLOCK_MARK_SPARE_OFFSET         4
-//#define CONFIG_USE_HW_ECC
 static struct rt_mutex nand;
+/*	add for nor flash 2012-12-11	*/
+//#define RT_USING_NOR_AS_NAND
+#ifdef RT_USING_NOR_AS_NAND
+#define NOR_START_BLOCK 10
+#define NOR_SPARE_BLOCK 29
+#define	CHECK_DELAY	150000
+#define ROM_BASE 0x00000000
+#define toogle_addr(r)	((r))
+rt_base_t	baset;
+
+#define inportw(r) 		(*(volatile rt_uint16_t *)(r))
+#define outportw(r, d) 	(*(volatile rt_uint16_t *)(d) = r)
+
+static void SWPIDExit(void)
+{
+    outportw(0x00aa, ROM_BASE+0xaaaa);
+    outportw(0x0055, ROM_BASE+0x5554);
+    outportw(0x00f0, ROM_BASE+0xaaaa);
+}
+static void SWPIDEntry(void)
+{
+    outportw(0x00aa, ROM_BASE+0xaaaa);
+    outportw(0x0055, ROM_BASE+0x5554);
+    outportw(0x0090, ROM_BASE+0xaaaa);
+}
+/* RT-Thread MTD device interface */
+static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
+{
+	rt_int16_t PreData,CurrData;
+	rt_uint32_t TimeOut=0;
+
+	PreData = inportw(dst);
+	PreData = PreData & 0x0040;
+	while(TimeOut < CHECK_DELAY)
+	{
+		CurrData = inportw(dst);
+		CurrData = CurrData & 0x0040;
+		if(CurrData == PreData)
+		{
+			rt_hw_interrupt_enable(baset);
+			return RT_EOK;
+		}
+		else
+		{
+			PreData = CurrData;
+			TimeOut++;
+		}
+	}
+	rt_hw_interrupt_enable(baset);
+	return -1;
+}
+
+static rt_err_t sst39vf_mtd_check_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	//for nor flash ,there is no bad block
+	return RT_EOK;
+}
+
+static rt_err_t sst39vf_mtd_mark_bad_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	//for nor flash ,there is no bad block
+	return RT_EOK;
+}
+static rt_uint8_t SectorErase(rt_uint32_t sector)
+{
+	baset=rt_hw_interrupt_disable();
+	outportw(0xaaaa, ROM_BASE+0xaaaa);
+	outportw(0x5555, ROM_BASE+0x5554);
+	outportw(0x8080, ROM_BASE+0xaaaa);
+	outportw(0xaaaa, ROM_BASE+0xaaaa);
+	outportw(0x5555, ROM_BASE+0x5554);
+	outportw(0x3030, ROM_BASE+sector);	
+	return check_toggle_ready(ROM_BASE+sector);
+}
+
+static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t WordCnt)
+{	
+
+	for( ; WordCnt; ProgStart+=2, DataPtr++, WordCnt--) {
+		baset=rt_hw_interrupt_disable();
+		outportw(0xaaaa, ROM_BASE+0xaaaa);
+		outportw(0x5555, ROM_BASE+0x5554);
+		outportw(0xa0a0, ROM_BASE+0xaaaa);
+		outportw(*DataPtr, ROM_BASE+ProgStart);
+
+		if(check_toggle_ready(ROM_BASE+ProgStart)!=RT_EOK)
+		{
+			return RT_ERROR;
+		}
+
+	}
+	return RT_EOK;
+}
+
+static rt_err_t sst39vf_mtd_erase_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	//step1 get offset of sst39vf's sector position
+	rt_uint32_t block_offs=(block-NAND_END_BLOCK)*16*1024+NOR_START_BLOCK*64*1024;//offs of sst39vf1601, form block 10 ,then to sector address
+	int i;
+	rt_uint16_t rt_err;
+	rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
+	//step2 erase 4 sector(one sector is 4k byte, nand's 1 block = 32 page = 32*512 byte = 4 sector, so we need erase 4 sector at a time )
+	for(i=0;i<4;i++)
+	{
+		rt_err=SectorErase(block_offs & ~0xfff);
+		block_offs=block_offs+4096;
+		if(rt_err!=RT_EOK) 
+		{	//4K Bytes boudary
+			rt_kprintf("erase nor block %d failed\n",block_offs/(32*512));
+			return RT_ERROR;
+		}
+	}
+	//step3 update spare area at the last 10 sectors 16 bytes to 0xff
+	/*read back spare data, 1 sector is enough*/
+	rt_uint32_t spare_offs = ((block - NAND_END_BLOCK)/8)*4*1024 + NOR_SPARE_BLOCK*64*1024;
+	rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
+	/*erase this sector*/
+	if(SectorErase(spare_offs&~0xfff)==RT_EOK)
+	{
+		for(i=((block-NAND_END_BLOCK)%8)*512;i<((block-NAND_END_BLOCK)%8+1)*512;i++)//one sector=4096byte can store 8block's spare info
+			spare_buf[i]=0xff;
+	}
+	/*wrtie new data ,0xff to this block's spare*/
+	if(FlashProg(spare_offs,(rt_uint16_t *)spare_buf,2048)!=RT_EOK);
+	{
+		rt_kprintf("prog nor block spare %d failed\n",spare_offs/(32*512));
+		rt_free(spare_buf);
+		return RT_ERROR;
+	}
+	
+	rt_free(spare_buf);
+	return RT_EOK;
+}
+
+static rt_err_t sst39vf_mtd_read(
+		struct rt_mtd_nand_device * dev,
+		rt_off_t page,
+		rt_uint8_t * data, rt_uint32_t data_len, 
+		rt_uint8_t * spare, rt_uint32_t spare_len)
+{
+	// get offset of sst39vf's position
+	if (data != RT_NULL && data_len != 0)
+	{	
+		rt_uint32_t page_offs = (page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024;
+		rt_memcpy(data,(rt_uint8_t *)page_offs,data_len);
+	}
+
+	
+	if (spare != RT_NULL && spare_len != 0)
+	{
+		rt_uint32_t spare_offs = (page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024;
+		rt_memcpy(spare,(rt_uint8_t *)spare_offs,spare_len);
+	}
+	return RT_EOK;
+}
+
+static rt_err_t sst39vf_mtd_write (
+		struct rt_mtd_nand_device * dev,
+		rt_off_t page,
+		const rt_uint8_t * data, rt_uint32_t data_len,
+		const rt_uint8_t * spare, rt_uint32_t spare_len)
+{
+	if (data != RT_NULL && data_len != 0)
+	{	
+		//step1 get offset of sst39vf's position		
+		rt_uint8_t *buf=(rt_uint8_t *)rt_malloc(4096);
+		rt_uint32_t page_offs = ((page-NAND_END_BLOCK*32)/8)*4*1024 + NOR_START_BLOCK*64*1024;
+		int i;
+		//step2 copy one sector back
+		rt_memcpy(buf,(rt_uint8_t *)page_offs,4096);
+		//step3 erase this sector
+		if(SectorErase(page_offs&~0xfff)==RT_EOK)
+		{
+			//step4 modify data
+			for(i=((page-NAND_END_BLOCK*32)%8)*512;i<((page-NAND_END_BLOCK*32)%8+1)*512;i++)
+				buf[i]=data[i%512];
+		}
+		/*wrtie new data to this block's spare*/
+		if(FlashProg(page_offs,(rt_uint16_t *)buf,2048)!=RT_EOK);
+		{
+			rt_kprintf("prog nor block %d ,page %x failed\n",page_offs/(32*512),page_offs/512);
+			rt_free(buf);
+			return RT_ERROR;
+		}		
+	}
+
+	
+	if (spare != RT_NULL && spare_len != 0)
+	{
+		//step1 get offset of sst39vf's position		
+		rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
+		rt_uint32_t spare_offs = ((page-NAND_END_BLOCK*32)/256)*4*1024 + NOR_START_BLOCK*64*1024;
+		int i;
+		//step2 copy one sector back
+		rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
+		//step3 erase this sector
+		if(SectorErase(spare_offs&~0xfff)==RT_EOK)
+		{
+			//step4 modify data
+			for(i=((page-NAND_END_BLOCK*32)%256)*16;i<((page-NAND_END_BLOCK*32)%256+1)*16;i++)
+				spare_buf[i]=spare[i%16];
+		}
+		/*wrtie new data to this block's spare*/
+		if(FlashProg(spare_offs,(rt_uint16_t *)spare_buf,2048)!=RT_EOK);
+		{
+			rt_kprintf("prog nor block spare %d ,page spare %x failed\n",spare_offs/(32*512),spare_offs/512);
+			rt_free(spare_buf);
+			return RT_ERROR;
+		}
+
+	}
+}
+
+static rt_err_t sst39vf_read_id(
+		struct rt_mtd_nand_device * dev)
+{
+    rt_uint32_t i;
+
+    SWPIDEntry();
+    i  = inportw(ROM_BASE);
+    i |= inportw(ROM_BASE+2)<<16;
+    SWPIDExit();
+	rt_kprintf("sst39vf id 0X%x",i);
+    return RT_EOK;	
+}
+#endif
+/*	add for nor flash 2012-12-11	*/
 rt_uint32_t NF_DETECT_RB(void)
 {
 	rt_uint8_t stat;
@@ -151,7 +377,6 @@ static rt_err_t k9f2808_mtd_erase_block(
     	rt_err_t result = RT_EOK;
 	block <<= 5; /* get the first page's address in this block*/
 
-	rt_mutex_take(&nand, RT_WAITING_FOREVER);
 	NF_CE_L();  /* enable chip */
 	
 	NF_CMD(CMD_ERASE1);	/* erase one block 1st command */
@@ -168,7 +393,6 @@ static rt_err_t k9f2808_mtd_erase_block(
 	}
 
 	NF_CE_H();
-	rt_mutex_release(&nand);
 	//rt_kprintf("k9f2808_mtd_erase_block %d\n",block);
 	return result;
 
@@ -186,8 +410,6 @@ static rt_err_t k9f2808_mtd_read(
 	rt_uint32_t status;
 	rt_err_t result = RT_EOK;
 	
-	rt_mutex_take(&nand, RT_WAITING_FOREVER);
-
 	NF_CE_L();
 	if (data != RT_NULL && data_len != 0)
 	{
@@ -226,7 +448,6 @@ static rt_err_t k9f2808_mtd_read(
 		result = RT_EOK;
 	}
 	NF_CE_H();
-	rt_mutex_release(&nand);
 	//for(i=0;i<spare_len;i++)
 	//rt_kprintf("k9f2808_mtd_read %d\n",spare[i]);
 	/* TODO: more check about status */
@@ -242,9 +463,6 @@ static rt_err_t k9f2808_mtd_write (
 	rt_uint32_t i;
 	rt_uint32_t mecc0;
 	rt_err_t result = RT_EOK;
-
-	rt_mutex_take(&nand, RT_WAITING_FOREVER);
-
 
 	NF_CE_L();       /* enable chip */
 	if (data != RT_NULL && data_len != 0)
@@ -283,7 +501,6 @@ static rt_err_t k9f2808_mtd_write (
 
 __ret:
 	NF_CE_H(); /* disable chip */
-	rt_mutex_release(&nand);
 	//for(i=0;i<spare_len;i++)
 	//rt_kprintf("k9f2808_mtd_write %d\n",spare[i]);
 	return result;
@@ -304,21 +521,156 @@ static rt_err_t k9f2808_read_id(
 	rt_kprintf("K9F2808 ID %x\n",id);
 	return RT_EOK;
 }
-
-const static struct rt_mtd_nand_driver_ops k9f2808_mtd_ops =
+static rt_err_t nand_mtd_check_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
 {
-	k9f2808_read_id,
-	k9f2808_mtd_read,
-	k9f2808_mtd_write,
-	k9f2808_mtd_erase_block,
-	k9f2808_mtd_check_block,
-	k9f2808_mtd_mark_bad_block,
+	rt_err_t result=RT_EOK;
+	
+	rt_mutex_take(&nand, RT_WAITING_FOREVER);
+	#ifdef RT_USING_NOR_AS_NAND
+	if(block>=NAND_END_BLOCK)
+		result = sst39vf_mtd_check_block(device,block);
+	else
+	#endif
+		result = k9f2808_mtd_check_block(device,block);
+	rt_mutex_release(&nand);
+	return result;
+}
+
+static rt_err_t nand_mtd_mark_bad_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	rt_err_t result=RT_EOK;	
+	rt_mutex_take(&nand, RT_WAITING_FOREVER);
+	#ifdef RT_USING_NOR_AS_NAND
+	if(block>=NAND_END_BLOCK)
+		result = sst39vf_mtd_mark_bad_block(device,block);
+	else
+	#endif
+		result = k9f2808_mtd_mark_bad_block(device,block);
+	rt_mutex_release(&nand);
+	return result;
+}
+
+static rt_err_t nand_mtd_erase_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	rt_err_t result=RT_EOK;	
+	rt_mutex_take(&nand, RT_WAITING_FOREVER);
+	#ifdef RT_USING_NOR_AS_NAND
+	if(block>=NAND_END_BLOCK)
+		result = sst39vf_mtd_erase_block(device,block);
+	else
+	#endif
+		result = k9f2808_mtd_erase_block(device,block);
+	rt_mutex_release(&nand);
+	return result;
+}
+
+static rt_err_t nand_mtd_read(
+		struct rt_mtd_nand_device * dev,
+		rt_off_t page,
+		rt_uint8_t * data, rt_uint32_t data_len, //may not always be 2048
+		rt_uint8_t * spare, rt_uint32_t spare_len)
+{
+	rt_err_t result=RT_EOK;
+	rt_mutex_take(&nand, RT_WAITING_FOREVER);
+	#ifdef RT_USING_NOR_AS_NAND
+	if(page>=NAND_END_BLOCK*32)
+		result = sst39vf_mtd_read(dev,page,data,data_len,spare,spare_len);
+	else
+	#endif
+		result = k9f2808_mtd_read(dev,page,data,data_len,spare,spare_len);
+	rt_mutex_release(&nand);
+
+	return result;
+}
+
+static rt_err_t nand_mtd_write (
+		struct rt_mtd_nand_device * dev,
+		rt_off_t page,
+		const rt_uint8_t * data, rt_uint32_t data_len,//will be 2048 always!
+		const rt_uint8_t * spare, rt_uint32_t spare_len)
+{	
+	rt_err_t result=RT_EOK;
+	rt_mutex_take(&nand, RT_WAITING_FOREVER);
+	#ifdef RT_USING_NOR_AS_NAND
+	if(page>=NAND_END_BLOCK*32)
+		result = sst39vf_mtd_write(dev,page,data,data_len,spare,spare_len);
+	else
+	#endif
+		result = k9f2808_mtd_write(dev,page,data,data_len,spare,spare_len);
+	rt_mutex_release(&nand);
+
+	return result;
+}
+
+static rt_err_t nand_read_id(
+		struct rt_mtd_nand_device * dev)
+{
+	#ifdef RT_USING_NOR_AS_NAND
+	sst39vf_read_id(dev);
+	#endif
+	k9f2808_read_id(dev);
+    return RT_EOK;	
+}
+
+const static struct rt_mtd_nand_driver_ops nand_mtd_ops =
+{
+	nand_read_id,
+	nand_mtd_read,
+	nand_mtd_write,
+	RT_NULL,
+	nand_mtd_erase_block,
+	nand_mtd_check_block,
+	nand_mtd_mark_bad_block,
 };
 
 /* interface of nand and rt-thread device */
-static struct rt_mtd_nand_device nand_part[4];
+static struct rt_mtd_nand_device nand_part[5];
 
 void k9f2808_mtd_init()
+{
+	/* the first partition of nand */
+	nand_part[0].page_size = PAGE_DATA_SIZE;
+	nand_part[0].pages_per_block = 32;//don't caculate oob size
+	nand_part[0].block_start = 0;
+	nand_part[0].block_end = 255;
+	nand_part[0].oob_size = 16;
+	nand_part[0].ops = &nand_mtd_ops;
+	rt_mtd_nand_register_device("nand0", &nand_part[0]);
+
+	/* the second partition of nand */
+	nand_part[1].page_size = PAGE_DATA_SIZE;
+	nand_part[1].pages_per_block = 32;//don't caculate oob size
+	nand_part[1].block_start = 256;
+	nand_part[1].block_end = 512-1;
+	nand_part[1].oob_size = 16;
+	nand_part[1].ops = &nand_mtd_ops;
+	rt_mtd_nand_register_device("nand1", &nand_part[1]);
+
+	/* the third partition of nand */
+	nand_part[2].page_size = PAGE_DATA_SIZE;
+	nand_part[2].pages_per_block = 32;//don't caculate oob size
+	nand_part[2].block_start = 512;
+	nand_part[2].block_end = 512+256-1;
+	nand_part[2].oob_size = 16;
+	nand_part[2].ops = &nand_mtd_ops;
+	rt_mtd_nand_register_device("nand2", &nand_part[2]);
+
+	/* the 4th partition of nand */
+	nand_part[3].page_size = PAGE_DATA_SIZE;
+	nand_part[3].pages_per_block = 32;//don't caculate oob size
+	nand_part[3].block_start = 512+256;
+	nand_part[3].block_end = NAND_END_BLOCK-1;
+	nand_part[3].oob_size = 16;
+	nand_part[3].ops = &nand_mtd_ops;
+	rt_mtd_nand_register_device("nand3", &nand_part[3]);
+}
+void nand_mtd_init()
 {
 	/* initialize nand controller of S3C2440 */
 	nand_hw_init();
@@ -328,43 +680,24 @@ void k9f2808_mtd_init()
 	{
 		rt_kprintf("init nand lock mutex failed\n");
 	}
-	/* the first partition of nand */
-	nand_part[0].page_size = PAGE_DATA_SIZE;
-	nand_part[0].pages_per_block = 32;//don't caculate oob size
-	nand_part[0].block_start = 0;
-	nand_part[0].block_end = 255;
-	nand_part[0].oob_size = 16;
-	nand_part[0].ops = &k9f2808_mtd_ops;
-	rt_mtd_nand_register_device("nand0", &nand_part[0]);
 
-	/* the second partition of nand */
-	nand_part[1].page_size = PAGE_DATA_SIZE;
-	nand_part[0].pages_per_block = 32;//don't caculate oob size
-	nand_part[1].block_start = 256;
-	nand_part[1].block_end = 512-1;
-	nand_part[1].oob_size = 16;
-	nand_part[1].ops = &k9f2808_mtd_ops;
-	rt_mtd_nand_register_device("nand1", &nand_part[1]);
 
-	/* the third partition of nand */
-	nand_part[2].page_size = PAGE_DATA_SIZE;
-	nand_part[0].pages_per_block = 32;//don't caculate oob size
-	nand_part[2].block_start = 512;
-	nand_part[2].block_end = 512+256-1;
-	nand_part[2].oob_size = 16;
-	nand_part[2].ops = &k9f2808_mtd_ops;
-	rt_mtd_nand_register_device("nand2", &nand_part[2]);
+	k9f2808_mtd_init();
+	
+#ifdef RT_USING_NOR_AS_NAND
+	/* the 5th partition of nand */
+	nand_part[4].page_size = PAGE_DATA_SIZE;
+	nand_part[4].pages_per_block = 32;//don't caculate oob size
+	nand_part[4].block_start = NAND_END_BLOCK;
+	nand_part[4].block_end = 1104-1;
+	nand_part[4].oob_size = 16;
+	nand_part[4].ops = &nand_mtd_ops;
+	rt_mtd_nand_register_device("nand4", &nand_part[4]);
+#endif
 
-	/* the 4th partition of nand */
-	nand_part[3].page_size = PAGE_DATA_SIZE;
-	nand_part[0].pages_per_block = 32;//don't caculate oob size
-	nand_part[3].block_start = 512+256;
-	nand_part[3].block_end = 1024-1;
-	nand_part[3].oob_size = 16;
-	nand_part[3].ops = &k9f2808_mtd_ops;
-	rt_mtd_nand_register_device("nand3", &nand_part[3]);
+	nand_read_id(RT_NULL);
+
 }
-
 #include "finsh.h"
 static char buf[PAGE_DATA_SIZE+16];
 static char buf1[PAGE_DATA_SIZE+16];
@@ -375,225 +708,225 @@ void nand_erase(int start, int end)
 {
 	int page;
 	flag=1;
+	rt_memset(buf, 0, PAGE_DATA_SIZE);
+	rt_memset(spare, 0, 16);
 	for(; start <= end; start ++)
 	{
 		page = start * 32;
-		rt_memset(buf, 0, PAGE_DATA_SIZE);
-		rt_memset(spare, 0, 16);
-
-		k9f2808_mtd_erase_block(RT_NULL, start);
-
-		k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 16);
+		nand_mtd_erase_block(RT_NULL, start);
+		nand_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 16);
 		if (spare[0] != 0xFF)
 		{
 			rt_kprintf("block %d is bad, mark it bad\n", start);
-
-			//rt_memset(spare, 0xFF, 64);
 			if (spare[4] == 0xFF)
 			{
 				spare[4] = 0x00;
-				k9f2808_mtd_write(RT_NULL, page, RT_NULL, 0, spare, 16);
+				nand_mtd_write(RT_NULL, page, RT_NULL, 0, spare, 16);
 			}
 		}
 	}
 }
 
-int nand_read(int page)
+int nand_read(int start,int end)
 {
-	int i;
+	int i,page;
 	int res;
 	rt_memset(buf, 0, sizeof(buf));
-//	rt_memset(spare, 0, 64);
-
-//	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 64);
-	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE+16, RT_NULL, 0);
-	//rt_kprintf("block=%d, page=%d\n", page/32, page%32);
-	for(i=0; i<PAGE_DATA_SIZE; i++)
+	for(; start <= end; start ++)
 	{
-		//rt_kprintf("%02x ", buf[i]);
-		//if((i+1)%16 == 0)
-		//	rt_kprintf("\n");
+		page = start * 32;
+		res = nand_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE+16, RT_NULL, 0);
+		for(i=0; i<PAGE_DATA_SIZE; i++)
+		{
 			if(flag==0)
 			{
 				if(buf[i]!=buf1[i])
-					rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+				rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
 			}else
 			{
 				if(buf[i]!=0xff)
-					rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
+				rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
 			}
-	}
+		}
 
-	//rt_kprintf("spare:\n");
-	for(i=0; i<16; i++)
-	{
-//		rt_kprintf("%02x ", spare[i]);
-		//rt_kprintf("%02x ", buf[512+i]);
-		//if((i+1)%8 == 0)
-			//rt_kprintf("\n");
+		for(i=0; i<16; i++)
+		{
 			if(flag==0)
 			{
 				if(buf[512+i]!=spare1[i])
-					rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+				rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
 			}else
 			{
 				if(buf[512+i]!=0xff)
-					rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
+				rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
 			}
+		}
 	}
 	return res;
 }
 int nand_write(int start,int end)
 {
 	int i;
+	rt_err_t result=RT_EOK;
 	rt_memset(buf, 0, PAGE_DATA_SIZE);
+	rt_memset(spare, 0, 16);
 	for(i=0; i<PAGE_DATA_SIZE; i++)
-		{
-			buf[i] = (i % 2) + i / 2;
-			buf1[i] = buf[i];
-		}
+	{
+		buf[i] = (i % 2) + i / 2;
+		buf1[i] = buf[i];
+	}
 	for(i=0;i<16;i++)
+	{
+		spare[i]=i;
+		spare1[i]=i;
+	}
+	flag=0;
+	for(;start<=end;start++)		
+	  for(i=0;i<32;i++)
 		{
-			spare[i]=i;
-			spare1[i]=i;
-		}
-		flag=0;
-		for(;start<end;start++)		
-		  for(i=0;i<32;i++)
-			k9f2808_mtd_write(RT_NULL, start*32+i, buf, PAGE_DATA_SIZE, spare, 16);
+			result = nand_mtd_write(RT_NULL, start*32+i, buf, PAGE_DATA_SIZE, spare, 16);
+			if(result!=RT_EOK)
+			{
+				rt_kprintf("nand_mtd_write block %d,page %d filed\n",start,start*32+i);
+			}
+	  	}
+	return	result;
 }
 
-int nand_read2(int page)
+int nand_read2(int start,int end)
 {
-	int i;
+	int i,page;
 	int res;
-	rt_memset(buf, 0, sizeof(buf));
-
-	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, RT_NULL, 0);
-	//rt_kprintf("block=%d, page=%d\n", page/32, page%32);
-	for(i=0; i<PAGE_DATA_SIZE; i++)
-	{
-		//rt_kprintf("%02x ", buf[i]);
-		//if((i+1)%16 == 0)
-			//rt_kprintf("\n");
-			if(flag==0)
-			{
-				if(buf[i]!=buf1[i])
-					rt_kprintf("nand_read2 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
-			}else
-			{
-				if(buf[i]!=0xff)
-					rt_kprintf("nand_read2 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
-			}
-	}
-
+	rt_memset(buf, 0, sizeof(buf));		
 	rt_memset(spare, 0, 16);
-	res = k9f2808_mtd_read(RT_NULL, page, RT_NULL, 0, spare, 16);
-	//rt_kprintf("spare:\n");
-	for(i=0; i<16; i++)
-	{
-		//rt_kprintf("%02x ", spare[i]);
-		//if((i+1)%8 == 0)
-		//	rt_kprintf("\n");
-		if(flag==0)
-			{
-				if(spare[i]!=spare1[i])
-					rt_kprintf("nand_read2 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
-			}else
-			{
-				if(spare[i]!=0xff)
-					rt_kprintf("nand_read2 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
-			}
-	}
-	return res;
-}
-int nand_read3(int page)
-{
-	int i;
-	int res;
-	rt_memset(buf, 0, sizeof(buf));
-	rt_memset(spare, 0, 16);
-
-	res = k9f2808_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 16);
-	//rt_kprintf("block=%d, page=%d\n", page/32, page%32);
-	for(i=0; i<PAGE_DATA_SIZE; i++)
-	{
-		//rt_kprintf("%02x ", buf[i]);
-		//if((i+1)%16 == 0)
-		//	rt_kprintf("\n");
-		if(flag==0)
-			{
-				if(buf[i]!=buf1[i])
-					rt_kprintf("nand_read3 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
-			}else
-			{
-				if(buf[i]!=0xff)
-					rt_kprintf("nand_read3 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
-			}
-	}
-
-	//rt_kprintf("spare:\n");
-	for(i=0; i<16; i++)
-	{
-		//rt_kprintf("%02x ", spare[i]);
-		//if((i+1)%8 == 0)
-		//	rt_kprintf("\n");
-		if(flag==0)
-			{
-				if(spare[i]!=spare1[i])
-					rt_kprintf("nand_read3 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
-			}else
-			{
-				if(spare[i]!=0xff)
-					rt_kprintf("nand_read3 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
-			}
-	}
-	return res;
-}
-void nand_readt(int start, int end)
-{
-	int page,i;
 	for(; start <= end; start ++)
 	{
 		page = start * 32;
-		rt_memset(buf, 0, PAGE_DATA_SIZE+16);
-		rt_memset(spare, 0, 16);
-		for(i=0;i<32;i++){
-		nand_read(page+i);
-		nand_read2(page+i);
-		nand_read3(page+i);
+
+		res = nand_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, RT_NULL, 0);
+		for(i=0; i<PAGE_DATA_SIZE; i++)
+		{
+			if(flag==0)
+			{
+				if(buf[i]!=buf1[i])
+				rt_kprintf("nand_read2 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(buf[i]!=0xff)
+				rt_kprintf("nand_read2 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
+			}
+		}
+
+
+		res = nand_mtd_read(RT_NULL, page, RT_NULL, 0, spare, 16);
+		for(i=0; i<16; i++)
+		{
+			if(flag==0)
+			{
+				if(spare[i]!=spare1[i])
+				rt_kprintf("nand_read2 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(spare[i]!=0xff)
+				rt_kprintf("nand_read2 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
+			}
+		}
 	}
-	}
+	return res;
 }
-int nand_check(int block)
+int nand_read3(int start, int end)
 {
-	if ( k9f2808_mtd_check_block(RT_NULL, block) != RT_EOK)
-		rt_kprintf("block %d is bad\n", block);
-	//else
-	//	rt_kprintf("block %d is good\n", block);
+	int i,page;
+	int res;
+	rt_memset(buf, 0, sizeof(buf));
+	rt_memset(spare, 0, 16);
+	for(; start <= end; start ++)
+	{
+		page = start * 32;
+		res = nand_mtd_read(RT_NULL, page, buf, PAGE_DATA_SIZE, spare, 16);
+		for(i=0; i<PAGE_DATA_SIZE; i++)
+		{
+			if(flag==0)
+			{
+				if(buf[i]!=buf1[i])
+				rt_kprintf("nand_read3 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(buf[i]!=0xff)
+				rt_kprintf("nand_read3 block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);			
+			}
+		}
+
+		for(i=0; i<16; i++)
+		{
+			if(flag==0)
+			{
+				if(spare[i]!=spare1[i])
+				rt_kprintf("nand_read3 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+			}else
+			{
+				if(spare[i]!=0xff)
+				rt_kprintf("nand_read3 block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);			
+			}
+		}
+	
+	}
+	return res;
+}
+void nand_read_total(int start, int end)
+{
+
+	nand_read(start,end);
+	nand_read2(start,end);
+	nand_read3(start,end);
+}
+int nand_check(int start, int end)
+{
+	for(; start <= end; start ++)
+	{
+		if ( nand_mtd_check_block(RT_NULL, start) != RT_EOK)
+			rt_kprintf("block %d is bad\n", start);
+	}
 }
 
-int nand_mark(int block)
+int nand_mark(int start,int end)
 {
-	return k9f2808_mtd_mark_bad_block(RT_NULL, block);
+	rt_err_t result;
+	for(; start <= end; start ++)
+	{
+		result = nand_mtd_mark_bad_block(RT_NULL, start);
+		if(result !=RT_EOK)
+			rt_kprintf("nand_mark %d block failed",start);
+	}
 }
 void nand_id(void)
 {
-	k9f2808_read_id(NULL);
+	nand_read_id(NULL);
 }
-void nand_checkt(void)
+void nand_test_erase(void)
 {
-	int i;
-	for(i=0;i<1024;i++)
-	nand_check(i);
+	nand_erase(0,1103);
+	rt_kprintf("total block are erased\n");
+	nand_read_total(0,1103);
+	rt_kprintf("total block are readed\n");
+}
+void nand_test_write(void)
+{
+	nand_erase(0,1103);
+	rt_kprintf("total block are erased\n");
+	nand_write(0,1103);
+	rt_kprintf("total block are writed\n");
+	nand_read_total(0,1103);
+	rt_kprintf("total block are readed\n");
 }
 FINSH_FUNCTION_EXPORT(nand_id, nand_read_id);
-FINSH_FUNCTION_EXPORT(nand_read, nand_read(0).);
-FINSH_FUNCTION_EXPORT(nand_read2, nand_read(1).);
-FINSH_FUNCTION_EXPORT(nand_read3, nand_read(1).);
-FINSH_FUNCTION_EXPORT(nand_write, nand_write(0).);
-FINSH_FUNCTION_EXPORT(nand_check, nand_check(1).);
-FINSH_FUNCTION_EXPORT(nand_checkt, nand_check(1).);
-FINSH_FUNCTION_EXPORT(nand_mark, nand_mark(1).);
-FINSH_FUNCTION_EXPORT(nand_erase, nand_erase(0, 1024). erase block in nand);
-FINSH_FUNCTION_EXPORT(nand_readt, nand_erase(0, 1024). erase block in nand);
+FINSH_FUNCTION_EXPORT(nand_read, nand_read(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_read2, nand_read2(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_read3, nand_read3(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_read_total, nand_read_total(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_write, nand_write(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_check, nand_check(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_mark, nand_mark(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_test_erase, nand_test_erase().);
+FINSH_FUNCTION_EXPORT(nand_test_write, nand_test_write().);
+FINSH_FUNCTION_EXPORT(nand_erase, nand_erase(0, 1103). erase block in nand);
