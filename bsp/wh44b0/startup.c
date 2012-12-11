@@ -108,13 +108,13 @@ void rtthread_startup(void)
        sst39vfxx_mtd_init("nor", 10, 30);
 #endif
 #ifdef RT_USING_MTD_NAND
-	k9f2808_mtd_init();
+	nand_mtd_init();
 #endif 
 //	dfs_jffs2_init();
 //	devfs_init();
 //	libc_system_init("uart1");
 	dfs_init();
-	dfs_jffs2_init();
+	//dfs_jffs2_init();
 	dfs_romfs_init();
 	devfs_init();
 	dfs_uffs_init();
@@ -152,13 +152,20 @@ void rtthread_startup(void)
 
 	/* unmask interrupt */
 	rt_hw_interrupt_umask(INT_GLOBAL);
-	if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
+	/*if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
   {
      rt_kprintf("jffs2 initialized!\n");
   }
   else
       rt_kprintf("jffs2 initialzation failed!\n");
-  if (dfs_mount(RT_NULL, "/dev", "devfs", 0, 0) == 0)
+  */
+       if (dfs_mount("nand0", "/", "uffs", 0, 0) == 0)
+  {
+     rt_kprintf("uffs mount / partion ok\n");
+  }
+  else
+      rt_kprintf("uffs initialzation failed!\n");
+	if (dfs_mount(RT_NULL, "/dev", "devfs", 0, 0) == 0)
   {
      rt_kprintf("devfs initialized!\n");
   }
@@ -171,9 +178,15 @@ void rtthread_startup(void)
   }
   else
       rt_kprintf("romfs initialzation failed!\n");
-       if (dfs_mount("nand0", "/nand0", "uffs", 0, 0) == 0)
+       if (dfs_mount("nand1", "/nand1", "uffs", 0, 0) == 0)
   {
-     rt_kprintf("uffs initialized!\n");
+     rt_kprintf("uffs mount nand1 partion ok\n");
+  }
+  else
+      rt_kprintf("uffs initialzation failed!\n");
+       if (dfs_mount("nand4", "/nand4", "uffs", 0, 0) == 0)
+  {
+     rt_kprintf("uffs mount on nor ok\n");
   }
   else
       rt_kprintf("uffs initialzation failed!\n");

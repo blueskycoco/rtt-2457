@@ -12,7 +12,7 @@ if os.getenv('RTT_CC'):
 
 if  CROSS_TOOL == 'gcc':
 	PLATFORM 	= 'gcc'
-	EXEC_PATH	= '/opt/CrossCompile/CodeSourcery/Sourcery_CodeBench_for_ARM_EABI/bin'
+	EXEC_PATH	= '/opt/CrossCompile/CodeSourcery/Sourcery_CodeBench_Lite_for_ARM_EABI/bin'
 	
 elif CROSS_TOOL == 'keil':
 	PLATFORM 	= 'armcc'

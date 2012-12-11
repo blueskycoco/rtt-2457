@@ -42,14 +42,14 @@
 #define STATUS_READY        0x40    // ready
 #define STATUS_ERROR        0x01    // error
 #define	STATUS_ILLACC       0x08    // illegal access
-#define NAND_END_BLOCK 1024
+#define NAND_END_BLOCK 1025
 
 /* configurations */
 #define PAGE_DATA_SIZE                  512
 #define BLOCK_MARK_SPARE_OFFSET         4
 static struct rt_mutex nand;
 /*	add for nor flash 2012-12-11	*/
-//#define RT_USING_NOR_AS_NAND
+#define RT_USING_NOR_AS_NAND
 #ifdef RT_USING_NOR_AS_NAND
 #define NOR_START_BLOCK 10
 #define NOR_SPARE_BLOCK 29
@@ -97,7 +97,7 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
 		}
 	}
 	rt_hw_interrupt_enable(baset);
-	return -1;
+	return RT_ERROR;
 }
 
 static rt_err_t sst39vf_mtd_check_block(
@@ -163,6 +163,7 @@ static rt_err_t sst39vf_mtd_erase_block(
 		if(rt_err!=RT_EOK) 
 		{	//4K Bytes boudary
 			rt_kprintf("erase nor block %d failed\n",block_offs/(32*512));
+			rt_free(spare_buf);
 			return RT_ERROR;
 		}
 	}
@@ -172,14 +173,20 @@ static rt_err_t sst39vf_mtd_erase_block(
 	rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
 	/*erase this sector*/
 	if(SectorErase(spare_offs&~0xfff)==RT_EOK)
-	{
+	{		
+	//	rt_kprintf("erase nor block %d ok,secotr %d\n",spare_offs/(64*1024),(block-NAND_END_BLOCK)/8);
 		for(i=((block-NAND_END_BLOCK)%8)*512;i<((block-NAND_END_BLOCK)%8+1)*512;i++)//one sector=4096byte can store 8block's spare info
 			spare_buf[i]=0xff;
+	}else
+	{
+		rt_kprintf("erase nor block %d failed,secotr %d\n",spare_offs/(64*1024),(block-NAND_END_BLOCK)/8);
+		rt_free(spare_buf);
+		return RT_ERROR;
 	}
 	/*wrtie new data ,0xff to this block's spare*/
-	if(FlashProg(spare_offs,(rt_uint16_t *)spare_buf,2048)!=RT_EOK);
+	if(FlashProg(spare_offs&~0xfff,(rt_uint16_t *)spare_buf,2048)!=RT_EOK)
 	{
-		rt_kprintf("prog nor block spare %d failed\n",spare_offs/(32*512));
+		rt_kprintf("prog nor block %d failed,secotr %d\n",spare_offs/(64*1024),(block-NAND_END_BLOCK)/8);
 		rt_free(spare_buf);
 		return RT_ERROR;
 	}
@@ -198,7 +205,14 @@ static rt_err_t sst39vf_mtd_read(
 	if (data != RT_NULL && data_len != 0)
 	{	
 		rt_uint32_t page_offs = (page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024;
-		rt_memcpy(data,(rt_uint8_t *)page_offs,data_len);
+		if(data_len>512 && data_len<=528)
+		{
+		rt_uint32_t spare_offs = (page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024;
+			rt_memcpy(data,(rt_uint8_t *)page_offs,512);
+			rt_memcpy((rt_uint8_t *)(data+512),(rt_uint8_t *)spare_offs,data_len-512);
+		}
+		else
+			rt_memcpy(data,(rt_uint8_t *)page_offs,data_len);
 	}
 
 	
@@ -228,16 +242,27 @@ static rt_err_t sst39vf_mtd_write (
 		if(SectorErase(page_offs&~0xfff)==RT_EOK)
 		{
 			//step4 modify data
-			for(i=((page-NAND_END_BLOCK*32)%8)*512;i<((page-NAND_END_BLOCK*32)%8+1)*512;i++)
+		for(i=((page-NAND_END_BLOCK*32)%8)*512;i<((page-NAND_END_BLOCK*32)%8+1)*512;i++)
+			{
 				buf[i]=data[i%512];
+			}
 		}
 		/*wrtie new data to this block's spare*/
-		if(FlashProg(page_offs,(rt_uint16_t *)buf,2048)!=RT_EOK);
+		if(FlashProg(page_offs&~0xfff,(rt_uint16_t *)buf,2048)!=RT_EOK)
 		{
 			rt_kprintf("prog nor block %d ,page %x failed\n",page_offs/(32*512),page_offs/512);
 			rt_free(buf);
 			return RT_ERROR;
-		}		
+		}/*else
+		{
+			rt_memcpy(buf,(rt_uint8_t *)page_offs,4096);
+		rt_kprintf("read main buf\n");	
+		for(i=((page-NAND_END_BLOCK*32)%8)*512;i<((page-NAND_END_BLOCK*32)%8+1)*512;i++)
+			{
+		//		buf[i]=data[i%512];
+				rt_kprintf(" %d ",buf[i]);
+			}
+		}*/		
 	}
 
 	
@@ -245,7 +270,7 @@ static rt_err_t sst39vf_mtd_write (
 	{
 		//step1 get offset of sst39vf's position		
 		rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
-		rt_uint32_t spare_offs = ((page-NAND_END_BLOCK*32)/256)*4*1024 + NOR_START_BLOCK*64*1024;
+		rt_uint32_t spare_offs = ((page-NAND_END_BLOCK*32)/256)*4*1024 + NOR_SPARE_BLOCK*64*1024;
 		int i;
 		//step2 copy one sector back
 		rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
@@ -254,17 +279,29 @@ static rt_err_t sst39vf_mtd_write (
 		{
 			//step4 modify data
 			for(i=((page-NAND_END_BLOCK*32)%256)*16;i<((page-NAND_END_BLOCK*32)%256+1)*16;i++)
+			{
 				spare_buf[i]=spare[i%16];
+			}
 		}
 		/*wrtie new data to this block's spare*/
-		if(FlashProg(spare_offs,(rt_uint16_t *)spare_buf,2048)!=RT_EOK);
+		if(FlashProg(spare_offs&~0xfff,(rt_uint16_t *)spare_buf,2048)!=RT_EOK)
 		{
 			rt_kprintf("prog nor block spare %d ,page spare %x failed\n",spare_offs/(32*512),spare_offs/512);
 			rt_free(spare_buf);
 			return RT_ERROR;
-		}
+		}/*else
+		{
+			rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
+		rt_kprintf("read spare buf\n");	
+		for(i=((page-NAND_END_BLOCK*32)%256)*16;i<((page-NAND_END_BLOCK*32)%256+1)*16;i++)
+			{
+		//		buf[i]=data[i%512];
+				rt_kprintf(" %d ",spare_buf[i]);
+			}
+		}*/		
 
 	}
+	return RT_EOK;
 }
 
 static rt_err_t sst39vf_read_id(
@@ -276,7 +313,7 @@ static rt_err_t sst39vf_read_id(
     i  = inportw(ROM_BASE);
     i |= inportw(ROM_BASE+2)<<16;
     SWPIDExit();
-	rt_kprintf("sst39vf id 0X%x",i);
+	rt_kprintf("sst39vf id %x\n",i);
     return RT_EOK;	
 }
 #endif
@@ -741,7 +778,7 @@ int nand_read(int start,int end)
 			if(flag==0)
 			{
 				if(buf[i]!=buf1[i])
-				rt_kprintf("nand_read block %d ,page %d ,i %d is not correct\n",page/32,page%32,i);
+				rt_kprintf("nand_read block %d ,page %d , %d != %dis not correct\n",page/32,page%32,buf[i],buf1[i]);
 			}else
 			{
 				if(buf[i]!=0xff)
@@ -754,7 +791,7 @@ int nand_read(int start,int end)
 			if(flag==0)
 			{
 				if(buf[512+i]!=spare1[i])
-				rt_kprintf("nand_read block %d ,page %d ,spare %d is not correct\n",page/32,page%32,i);
+				rt_kprintf("nand_read block %d ,page %d ,spare %d!=%d is not correct\n",page/32,page%32,buf[512+i],spare1[i]);
 			}else
 			{
 				if(buf[512+i]!=0xff)

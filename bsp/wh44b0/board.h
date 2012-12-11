@@ -17,7 +17,7 @@
 #define __BOARD_H__
 #include <serial.h>
 #ifdef RT_USING_MTD_NAND
-void k9f2808_mtd_init(void);
+void nand_mtd_init(void);
 #endif
 void rt_hw_board_init(void);
 void rt_hw_led_set(rt_uint32_t led);

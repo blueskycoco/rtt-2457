@@ -312,7 +312,7 @@ void nor_read(const rt_uint32_t index,const rt_uint32_t index_end)
 	rt_free(buf);
 	rt_free(buf1);
 }
-FINSH_FUNCTION_EXPORT(nor_read, write block in SST39VF1601 flash);
+FINSH_FUNCTION_EXPORT(nor_read, nor_read(0,20). MIN 0 MAX 20);
 void nor_write(const rt_uint32_t index,const rt_uint32_t index_end)
 {
 	//rt_uint32_t index;
@@ -331,7 +331,7 @@ void nor_write(const rt_uint32_t index,const rt_uint32_t index_end)
 	}
 	rt_free(buf);
 }
-FINSH_FUNCTION_EXPORT(nor_write, write block in SST39VF1601 flash);
+FINSH_FUNCTION_EXPORT(nor_write, nor_write(0,20). MIN 0 MAX 20);
 void nor_erase(const rt_uint32_t index,const rt_uint32_t index_end)
 {
     rt_uint32_t i;
@@ -343,7 +343,7 @@ void nor_erase(const rt_uint32_t index,const rt_uint32_t index_end)
         sst39vfxx_erase_block(mtd, i * mtd->block_size,0);
     }
 }
-FINSH_FUNCTION_EXPORT(nor_erase, erase block in SST39VF1601 flash);
+FINSH_FUNCTION_EXPORT(nor_erase, nor_erase(0,20). MIN 0  MAX 20);
 #endif
 
 #endif
