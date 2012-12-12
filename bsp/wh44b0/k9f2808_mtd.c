@@ -99,22 +99,6 @@ static rt_uint8_t check_toggle_ready(rt_uint32_t dst)
 	rt_hw_interrupt_enable(baset);
 	return RT_ERROR;
 }
-
-static rt_err_t sst39vf_mtd_check_block(
-		struct rt_mtd_nand_device* device,
-		rt_uint32_t block)
-{
-	//for nor flash ,there is no bad block
-	return RT_EOK;
-}
-
-static rt_err_t sst39vf_mtd_mark_bad_block(
-		struct rt_mtd_nand_device* device,
-		rt_uint32_t block)
-{
-	//for nor flash ,there is no bad block
-	return RT_EOK;
-}
 static rt_uint8_t SectorErase(rt_uint32_t sector)
 {
 	baset=rt_hw_interrupt_disable();
@@ -143,6 +127,62 @@ static int FlashProg(rt_uint32_t ProgStart, rt_uint16_t *DataPtr, rt_uint32_t Wo
 		}
 
 	}
+	return RT_EOK;
+}
+
+static rt_err_t sst39vf_mtd_check_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	//for nor flash ,there is no bad block	
+	/*read back spare data, 1 sector is enough*/
+	rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
+	rt_uint32_t spare_offs = ((block - NAND_END_BLOCK)/8)*4*1024 + NOR_SPARE_BLOCK*64*1024;
+	rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
+	if(spare_buf[((block-NAND_END_BLOCK)%8)*512+BLOCK_MARK_SPARE_OFFSET]==0xff)
+	{
+		rt_free(spare_buf);
+		return RT_EOK;
+	}
+	else
+	{
+		rt_free(spare_buf);
+		return RT_ERROR;
+	}
+	
+	return RT_EOK;
+}
+
+static rt_err_t sst39vf_mtd_mark_bad_block(
+		struct rt_mtd_nand_device* device,
+		rt_uint32_t block)
+{
+	//for nor flash ,there is no bad block, but uffs need mark all block as bad first ,so just do it
+	/*read back spare data, 1 sector is enough*/
+	rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
+	rt_uint32_t spare_offs = ((block - NAND_END_BLOCK)/8)*4*1024 + NOR_SPARE_BLOCK*64*1024;
+	rt_memcpy(spare_buf,(rt_uint8_t *)spare_offs,4096);
+	/*erase this sector*/
+	if(SectorErase(spare_offs&~0xfff)==RT_EOK)
+	{		
+		//	rt_kprintf("erase nor block %d ok,secotr %d\n",spare_offs/(64*1024),(block-NAND_END_BLOCK)/8);
+		//for(i=((block-NAND_END_BLOCK)%8)*512;i<((block-NAND_END_BLOCK)%8+1)*512;i++)//one sector=4096byte can store 8block's spare info
+		spare_buf[((block-NAND_END_BLOCK)%8)*512+BLOCK_MARK_SPARE_OFFSET]=0x00;
+	}else
+	{
+		rt_kprintf("erase nor block %d failed,secotr %d\n",spare_offs/(64*1024),(block-NAND_END_BLOCK)/8);
+		rt_free(spare_buf);
+		return RT_ERROR;
+	}
+	/*wrtie new data ,0xff to this block's spare*/
+	if(FlashProg(spare_offs&~0xfff,(rt_uint16_t *)spare_buf,2048)!=RT_EOK)
+	{
+		rt_kprintf("prog nor block %d failed,secotr %d\n",spare_offs/(64*1024),(block-NAND_END_BLOCK)/8);
+		rt_free(spare_buf);
+		return RT_ERROR;
+	}
+	
+	rt_free(spare_buf);
 	return RT_EOK;
 }
 
