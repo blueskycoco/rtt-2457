@@ -150,8 +150,8 @@ static rt_err_t sst39vf_mtd_erase_block(
 		struct rt_mtd_nand_device* device,
 		rt_uint32_t block)
 {
-	//step1 get offset of sst39vf's sector position
-	rt_uint32_t block_offs=(block-NAND_END_BLOCK)*16*1024+NOR_START_BLOCK*64*1024;//offs of sst39vf1601, form block 10 ,then to sector address
+	//step1 get offset of sst39vf's sector position 1 block need 4 real nor sectors to store
+	rt_uint32_t block_offs=(block-NAND_END_BLOCK)*4*4*1024+NOR_START_BLOCK*64*1024;//offs of sst39vf1601, form block 10 ,then to sector address
 	int i;
 	rt_uint16_t rt_err;
 	rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
@@ -207,9 +207,13 @@ static rt_err_t sst39vf_mtd_read(
 		rt_uint32_t page_offs = (page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024;
 		if(data_len>512 && data_len<=528)
 		{
-		rt_uint32_t spare_offs = (page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024;
+			rt_uint32_t spare_offs = (page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024;
 			rt_memcpy(data,(rt_uint8_t *)page_offs,512);
 			rt_memcpy((rt_uint8_t *)(data+512),(rt_uint8_t *)spare_offs,data_len-512);
+			/*rt_kprintf("read spare\n");
+			int i=0;
+			for(i=0;i<16;i++)
+			rt_kprintf(" %d ",data[512+i]);*/
 		}
 		else
 			rt_memcpy(data,(rt_uint8_t *)page_offs,data_len);
@@ -220,6 +224,10 @@ static rt_err_t sst39vf_mtd_read(
 	{
 		rt_uint32_t spare_offs = (page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024;
 		rt_memcpy(spare,(rt_uint8_t *)spare_offs,spare_len);
+		/*	rt_kprintf("read spare\n");
+			int i=0;
+			for(i=0;i<16;i++)
+			rt_kprintf(" %d ",spare[i]);*/
 	}
 	return RT_EOK;
 }
@@ -256,7 +264,7 @@ static rt_err_t sst39vf_mtd_write (
 		}/*else
 		{
 			rt_memcpy(buf,(rt_uint8_t *)page_offs,4096);
-		rt_kprintf("read main buf\n");	
+		rt_kprintf("read block %d,buf\n",(page-NAND_END_BLOCK*32)/128+NOR_START_BLOCK);	
 		for(i=((page-NAND_END_BLOCK*32)%8)*512;i<((page-NAND_END_BLOCK*32)%8+1)*512;i++)
 			{
 		//		buf[i]=data[i%512];
@@ -278,9 +286,11 @@ static rt_err_t sst39vf_mtd_write (
 		if(SectorErase(spare_offs&~0xfff)==RT_EOK)
 		{
 			//step4 modify data
+		//	rt_kprintf("write spare\n");
 			for(i=((page-NAND_END_BLOCK*32)%256)*16;i<((page-NAND_END_BLOCK*32)%256+1)*16;i++)
 			{
 				spare_buf[i]=spare[i%16];
+		//		rt_kprintf(" %d ",spare_buf[i]);
 			}
 		}
 		/*wrtie new data to this block's spare*/
@@ -726,7 +736,7 @@ void nand_mtd_init()
 	nand_part[4].page_size = PAGE_DATA_SIZE;
 	nand_part[4].pages_per_block = 32;//don't caculate oob size
 	nand_part[4].block_start = NAND_END_BLOCK;
-	nand_part[4].block_end = 1104-1;
+	nand_part[4].block_end = 1103-1;
 	nand_part[4].oob_size = 16;
 	nand_part[4].ops = &nand_mtd_ops;
 	rt_mtd_nand_register_device("nand4", &nand_part[4]);
@@ -942,28 +952,28 @@ void nand_id(void)
 }
 void nand_test_erase(void)
 {
-	nand_erase(0,1103);
+	nand_erase(0,1102);
 	rt_kprintf("total block are erased\n");
-	nand_read_total(0,1103);
+	nand_read_total(0,1102);
 	rt_kprintf("total block are readed\n");
 }
 void nand_test_write(void)
 {
-	nand_erase(0,1103);
+	nand_erase(0,1102);
 	rt_kprintf("total block are erased\n");
-	nand_write(0,1103);
+	nand_write(0,1102);
 	rt_kprintf("total block are writed\n");
-	nand_read_total(0,1103);
+	nand_read_total(0,1102);
 	rt_kprintf("total block are readed\n");
 }
 FINSH_FUNCTION_EXPORT(nand_id, nand_read_id);
-FINSH_FUNCTION_EXPORT(nand_read, nand_read(0,1103).);
-FINSH_FUNCTION_EXPORT(nand_read2, nand_read2(0,1103).);
-FINSH_FUNCTION_EXPORT(nand_read3, nand_read3(0,1103).);
-FINSH_FUNCTION_EXPORT(nand_read_total, nand_read_total(0,1103).);
-FINSH_FUNCTION_EXPORT(nand_write, nand_write(0,1103).);
-FINSH_FUNCTION_EXPORT(nand_check, nand_check(0,1103).);
-FINSH_FUNCTION_EXPORT(nand_mark, nand_mark(0,1103).);
+FINSH_FUNCTION_EXPORT(nand_read, nand_read(0,1102).);
+FINSH_FUNCTION_EXPORT(nand_read2, nand_read2(0,1102).);
+FINSH_FUNCTION_EXPORT(nand_read3, nand_read3(0,1102).);
+FINSH_FUNCTION_EXPORT(nand_read_total, nand_read_total(0,1102).);
+FINSH_FUNCTION_EXPORT(nand_write, nand_write(0,1102).);
+FINSH_FUNCTION_EXPORT(nand_check, nand_check(0,1102).);
+FINSH_FUNCTION_EXPORT(nand_mark, nand_mark(0,1102).);
 FINSH_FUNCTION_EXPORT(nand_test_erase, nand_test_erase().);
 FINSH_FUNCTION_EXPORT(nand_test_write, nand_test_write().);
-FINSH_FUNCTION_EXPORT(nand_erase, nand_erase(0, 1103). erase block in nand);
+FINSH_FUNCTION_EXPORT(nand_erase, nand_erase(0, 1102). erase block in nand);
