@@ -192,7 +192,7 @@ static rt_err_t sst39vf_mtd_erase_block(
 {
 	//step1 get offset of sst39vf's sector position 1 block need 4 real nor sectors to store
 	rt_uint32_t block_offs=(block-NAND_END_BLOCK)*4*4*1024+NOR_START_BLOCK*64*1024;//offs of sst39vf1601, form block 10 ,then to sector address
-	int i;
+	rt_uint32_t i;
 	rt_uint16_t rt_err;
 	rt_uint8_t *spare_buf=(rt_uint8_t *)rt_malloc(4096);
 	//step2 erase 4 sector(one sector is 4k byte, nand's 1 block = 32 page = 32*512 byte = 4 sector, so we need erase 4 sector at a time )
@@ -230,7 +230,7 @@ static rt_err_t sst39vf_mtd_erase_block(
 		rt_free(spare_buf);
 		return RT_ERROR;
 	}
-	
+	rt_kprintf("Erase block %x,spare %x,offs %d\r\n",block_offs/65536,(block - NAND_END_BLOCK)/8,((block-NAND_END_BLOCK)%8)*512);
 	rt_free(spare_buf);
 	return RT_EOK;
 }
@@ -268,7 +268,8 @@ static rt_err_t sst39vf_mtd_read(
 			int i=0;
 			for(i=0;i<16;i++)
 			rt_kprintf(" %d ",spare[i]);*/
-	}
+	}	
+	rt_kprintf("Read block %x,sector %x ,spare %x\r\n",((page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024)/65536,(page-NAND_END_BLOCK*32)/8,(page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024);
 	return RT_EOK;
 }
 
@@ -351,6 +352,8 @@ static rt_err_t sst39vf_mtd_write (
 		}*/		
 
 	}
+	
+	rt_kprintf("Write block %x,sector %x ,spare %x\r\n",((page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024)/65536,(page-NAND_END_BLOCK*32)/8,(page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK*64*1024);
 	return RT_EOK;
 }
 
