@@ -94,8 +94,18 @@
 
 /* SECTION: lwip, a lighwight TCP/IP protocol stack */
 /* Using lighweight TCP/IP protocol stack*/
-/* #define RT_USING_LWIP */
-
+#define RT_USING_LWIP 
+#define RT_LWIP_USING_RT_MEM
+#define RT_LWIP_TCP_PCB_NUM	5
+#define RT_LWIP_TCP_SND_BUF	8192
+#define RT_LWIP_TCP_WND	8192
+#define RT_LWIP_TCP_SEG_NUM	40
+#define RT_LWIP_TCPTHREAD_PRIORITY	12
+#define RT_LWIP_TCPTHREAD_MBOX_SIZE	32
+#define RT_LWIP_TCPTHREAD_STACKSIZE	4096
+#define RT_LWIP_ETHTHREAD_PRIORITY	144
+#define RT_LWIP_ETHTHREAD_MBOX_SIZE	32
+#define RT_LWIP_ETHTHREAD_STACKSIZE	512
 /* Trace LwIP protocol*/
 /* #define RT_LWIP_DEBUG */
 

@@ -1,12 +1,14 @@
-import rtconfig
+# for module compiling
+import os
 Import('RTT_ROOT')
-from building import *
 
-src_bsp = ['application.c', 'startup.c', 'board.c', 'lowlevel.S','console.c','sst39vfxx_mtd_sim.c','k9f2808_mtd.c']
-src	= File(src_bsp)
-if GetDepend('RT_USING_DFS') == False:
-    SrcRemove(src, 'sst39vfxx_mtd_sim.c')
-CPPPATH = [GetCurrentDir()]
-group = DefineGroup('Startup', src, depend = [''], CPPPATH = CPPPATH)
+cwd = str(Dir('#'))
+objs = []
+list = os.listdir(cwd)
 
-Return('group')
+for d in list:
+    path = os.path.join(cwd, d)
+    if os.path.isfile(os.path.join(path, 'SConscript')):
+        objs = objs + SConscript(os.path.join(d, 'SConscript'))
+
+Return('objs')
