@@ -193,7 +193,7 @@ void uffs_DebugMessage(int level, const char *prefix, const char *suffix, const 
 void uffs_AssertCall(const char *file, int line, const char *msg, ...);
 #else
 
-#define UFFS_DBG_LEVEL  UFFS_MSG_NORMAL
+#define UFFS_DBG_LEVEL  UFFS_MSG_NOMSG //UFFS_MSG_NORMAL
 
 #ifdef CONFIG_ENABLE_UFFS_DEBUG_MSG
 #define uffs_DebugMessage(level, prefix, suffix, errFmt, ...) do { \

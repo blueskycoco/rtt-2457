@@ -28,7 +28,7 @@
 /*
  * RT-Thread DFS Interface for uffs
  */
-#define UFFS_DEVICE_MAX	        2	 /* the max partions on a nand deivce*/
+#define UFFS_DEVICE_MAX	        5	 /* the max partions on a nand deivce*/
 #define UFFS_MOUNT_PATH_MAX     128	 /* the mount point max length */
 #define FILE_PATH_MAX	        256	 /* the longest file path */
 

@@ -29,7 +29,7 @@
 #define RT_USING_DFS_UFFS
 
 /* the max number of mounted filesystem */
-#define DFS_FILESYSTEMS_MAX			4
+#define DFS_FILESYSTEMS_MAX			10
 /* the max number of opened files 		*/
 #define DFS_FD_MAX					4
 
