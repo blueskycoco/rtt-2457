@@ -2,7 +2,7 @@ Import('RTT_ROOT')
 Import('rtconfig')
 from building import *
 
-cwd     = os.path.join(str(Dir('#')), 'platforms')
+cwd     = os.path.join(str(Dir('#')), 'Platforms')
 src	= Glob('*.c')
 src += ['lowlevel.S']
 CPPPATH = [cwd]
