@@ -18,9 +18,13 @@
 
 #include <s3c44b0.h>
 #include <board.h>
+#ifdef RT_USING_DFS
 #include <dfs_init.h>
 #include <dfs_fs.h>
+#endif
+#ifdef RT_USING_DFS_UFFS
 #include <dfs_uffs.h>
+#endif
 #ifdef RT_USING_DFS_ROMFS
 #include <dfs_romfs.h>
 #endif
@@ -65,6 +69,7 @@ extern int  rt_application_init(void);
  */
 void rtthread_startup(void)
 {
+	int flag=0;
 	/* enable cpu cache */
 	rt_hw_cpu_icache_enable();
 
@@ -104,20 +109,21 @@ void rtthread_startup(void)
 	//rt_thread_idle_sethook(rt_hw_led_flash);
 #endif
 #ifdef RT_USING_DFS
+	dfs_init();
 #ifdef RT_USING_MTD_NOR
-       sst39vfxx_mtd_init("nor", 10, 30);
+    sst39vfxx_mtd_init("nor", 10, 30);
+	dfs_jffs2_init();
 #endif
 #ifdef RT_USING_MTD_NAND
 	nand_mtd_init();
-#endif 
-//	dfs_jffs2_init();
-//	devfs_init();
-//	libc_system_init("uart1");
-	dfs_init();
-	//dfs_jffs2_init();
-	dfs_romfs_init();
-	devfs_init();
 	dfs_uffs_init();
+#endif 
+#ifdef RT_USING_DFS_ROMFS
+	dfs_romfs_init();
+#endif
+#ifdef RT_USING_DFS_DEVFS
+	devfs_init();	
+#endif
 #endif
 #ifdef RT_USING_DEVICE
 	/* register uart0 */
@@ -138,8 +144,7 @@ void rtthread_startup(void)
 
 #ifdef RT_USING_FINSH
 	/* init the finsh input */
-	//rt_hw_finsh_init();
-
+	
 	/* init finsh */
 	finsh_system_init();
 	#ifdef RT_USING_DEVICE
@@ -152,45 +157,154 @@ void rtthread_startup(void)
 
 	/* unmask interrupt */
 	rt_hw_interrupt_umask(INT_GLOBAL);
-	/*if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
-  {
-     rt_kprintf("jffs2 initialized!\n");
-  }
-  else
-      rt_kprintf("jffs2 initialzation failed!\n");
-  */
-       if (dfs_mount("nand0", "/", "uffs", 0, 0) == 0)
-  {
-     rt_kprintf("uffs mount / partion ok\n");
-  }
-  else
-      rt_kprintf("uffs initialzation failed!\n");
+	
+#ifdef RT_USING_DFS
+#ifdef RT_USING_MTD_NOR
+	if (dfs_mount("nor", "/", "jffs2", 0, 0) == 0)
+	{
+		rt_kprintf("jffs2 initialized!\n");
+		flag=1;
+	}
+    else
+      	rt_kprintf("jffs2 initialzation failed!\n");
+#endif
+#ifndef RT_USING_MTD_NOR
+
+	if (dfs_mount("nand0", "/", "uffs", 0, 0) == 0)
+	{
+		rt_kprintf("uffs mount / partion ok\n");
+		flag=1;
+	}
+	else
+		rt_kprintf("uffs mount / partion failed!\n");
+	if (dfs_mount("nand4", "/nand4", "uffs", 0, 0) == 0)
+	{
+		rt_kprintf("uffs mount on nor ok\n");
+	}
+	else
+	{
+		if(flag==1 && mkdir("/nor",0777)==RT_EOK)
+		{
+			if (dfs_mount("nor", "/nor", "uffs", 0, 0) == 0)
+			{
+				rt_kprintf("uffs mount on nor ok\n");
+			}
+			else
+				rt_kprintf("uffs mount on nor failed!\n");
+		}
+		else
+			rt_kprintf("uffs mount on nor failed!\n");
+	}
+#else
+	if (dfs_mount("nand0", "/nand0", "uffs", 0, 0) == 0)
+	{
+		rt_kprintf("uffs mount /nand0 partion ok\n");
+	}
+	else
+	{
+		if(flag==1 && mkdir("/nand0",0777)==RT_EOK)
+		{
+			if (dfs_mount("nand0", "/nand0", "uffs", 0, 0) == 0)
+			{
+				rt_kprintf("uffs mount on /nand0 ok\n");
+			}
+			else
+				rt_kprintf("uffs mount on /nand0 failed!\n");
+		}
+		else
+			rt_kprintf("uffs mount on /nand0 failed!\n");
+	}
+
+#endif
+#ifdef RT_USING_DFS_DEVFS
 	if (dfs_mount(RT_NULL, "/dev", "devfs", 0, 0) == 0)
-  {
-     rt_kprintf("devfs initialized!\n");
-  }
-  else
-      rt_kprintf("devfs initialzation failed!\n");
-      libc_system_init("uart0");
-      if (dfs_mount(RT_NULL, "/rom", "rom", 0, &romfs_root) == 0)
-  {
-     rt_kprintf("romfs initialized!\n");
-  }
-  else
-      rt_kprintf("romfs initialzation failed!\n");
-       if (dfs_mount("nand1", "/nand1", "uffs", 0, 0) == 0)
-  {
-     rt_kprintf("uffs mount nand1 partion ok\n");
-  }
-  else
-      rt_kprintf("uffs initialzation failed!\n");
-       if (dfs_mount("nand4", "/nand4", "uffs", 0, 0) == 0)
-  {
-     rt_kprintf("uffs mount on nor ok\n");
-  }
-  else
-      rt_kprintf("uffs initialzation failed!\n");
-	rt_kprintf("init finish1\n");
+	{
+		rt_kprintf("devfs initialized!\n");
+	}
+	else
+		rt_kprintf("devfs initialzation failed!\n");
+	#ifdef RT_USING_NEWLIB
+	libc_system_init("uart0");
+	#endif
+#endif
+#ifdef RT_USING_DFS_ROMFS
+	if (dfs_mount(RT_NULL, "/rom", "rom", 0, &romfs_root) == 0)
+	{
+		rt_kprintf("romfs initialized!\n");
+	}
+	else
+	{
+		if(flag==1 && mkdir("/rom",0777)==RT_EOK)
+		{
+			if (dfs_mount(RT_NULL, "/rom", "rom", 0, &romfs_root) == 0)
+			{
+				rt_kprintf("romfs mount on /rom ok\n");
+			}
+			else
+				rt_kprintf("romfs mount on /rom failed!\n");
+		}
+		else
+			rt_kprintf("romfs mount on /rom failed!\n");
+	}
+#endif
+#ifdef RT_USING_MTD_NAND
+	if (dfs_mount("nand1", "/nand1", "uffs", 0, 0) == 0)
+	{
+		rt_kprintf("uffs mount nand1 partion ok\n");
+	}
+	else
+	{
+		if(flag==1 && mkdir("/nand1",0777)==RT_EOK)
+		{
+			if (dfs_mount("nand1", "/nand1", "uffs", 0, 0) == 0)
+			{
+				rt_kprintf("uffs mount on /nand1 ok\n");
+			}
+			else
+				rt_kprintf("uffs mount on /nand1 failed!\n");
+		}
+		else
+			rt_kprintf("uffs mount on /nand1 failed!\n");
+	}
+	if (dfs_mount("nand2", "/nand2", "uffs", 0, 0) == 0)
+	{
+		rt_kprintf("uffs mount nand2 partion ok\n");
+	}
+	else
+	{
+		if(flag==1 && mkdir("/nand2",0777)==RT_EOK)
+		{
+			if (dfs_mount("nand2", "/nand2", "uffs", 0, 0) == 0)
+			{
+				rt_kprintf("uffs mount on /nand2 ok\n");
+			}
+			else
+				rt_kprintf("uffs mount on /nand2 failed!\n");
+		}
+		else
+			rt_kprintf("uffs mount on /nand2 failed!\n");
+	}
+	if (dfs_mount("nand3", "/nand3", "uffs", 0, 0) == 0)
+	{
+		rt_kprintf("uffs mount nand3 partion ok\n");
+	}
+	else
+	{
+		if(flag==1 && mkdir("/nand3",0777)==RT_EOK)
+		{
+			if (dfs_mount("nand3", "/nand3", "uffs", 0, 0) == 0)
+			{
+				rt_kprintf("uffs mount on /nand3 ok\n");
+			}
+			else
+				rt_kprintf("uffs mount on /nand3 failed!\n");
+		}
+		else
+			rt_kprintf("uffs mount on /nand3 failed!\n");
+	}
+#endif
+#endif
+	rt_kprintf("init finish\n");
 	/* start scheduler */
 	rt_system_scheduler_start();
 

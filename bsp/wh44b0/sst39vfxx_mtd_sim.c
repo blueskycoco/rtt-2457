@@ -11,7 +11,6 @@
  * Date           Author       Notes
  * 2012-10-21     prife        the first version
  */
-
 #include <rtdevice.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,6 +18,7 @@
 #include "sst39vfxx_mtd.h"
 #include <s3c44b0.h>
 #ifdef RT_USING_MTD_NOR
+
 #define ROM_BASE 0x00000000
 #define MC_ID_SST39VF016               (0xBF)
 #define MC_ID_SST39VF032               (0x4A)

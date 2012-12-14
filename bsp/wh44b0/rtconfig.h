@@ -20,13 +20,14 @@
 /* Thread Debug*/
 /* #define RT_THREAD_DEBUG */
 //#define DFS_DEBUG 1
-#define RT_USING_MTD_NOR
-#define RT_USING_MTD_NAND
-#define RT_USING_DFS_JFFS2
 #define RT_USING_DFS
 #define RT_USING_DFS_DEVFS
 #define RT_USING_DFS_ROMFS
+//#define RT_USING_MTD_NOR
+//#define RT_USING_DFS_JFFS2
+#define RT_USING_MTD_NAND
 #define RT_USING_DFS_UFFS
+
 /* the max number of mounted filesystem */
 #define DFS_FILESYSTEMS_MAX			4
 /* the max number of opened files 		*/
@@ -86,7 +87,7 @@
 /* Using mini libc library*/
 /*#define RT_USING_MINILIBC*/
 #define RT_USING_NEWLIB
-//#define RT_USING_PTHREADS
+#define RT_USING_PTHREADS
 /* SECTION: C++ support */
 /* Using C++ support*/
 /* #define RT_USING_CPLUSPLUS */
