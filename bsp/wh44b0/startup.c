@@ -177,7 +177,7 @@ void rtthread_startup(void)
 	}
 	else
 		rt_kprintf("uffs mount / partion failed!\n");
-	if (dfs_mount("nand4", "/nand4", "uffs", 0, 0) == 0)
+	if (dfs_mount("nor", "/nor", "uffs", 0, 0) == 0)
 	{
 		rt_kprintf("uffs mount on nor ok\n");
 	}

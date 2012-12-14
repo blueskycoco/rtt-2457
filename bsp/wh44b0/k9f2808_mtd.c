@@ -51,7 +51,7 @@ static struct rt_mutex nand;
 
 #ifndef RT_USING_MTD_NOR
 #define NOR_START_BLOCK 10
-#define NOR_SPARE_BLOCK 1990656
+#define NOR_SPARE_BLOCK 1982464//1990656
 #define	CHECK_DELAY	150000
 #define ROM_BASE 0x00000000
 #define toogle_addr(r)	((r))
@@ -259,7 +259,7 @@ static rt_err_t sst39vf_mtd_read(
 		rt_uint32_t spare_offs = (page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK;
 		rt_memcpy(spare,(rt_uint8_t *)spare_offs,spare_len);
 	}	
-	rt_kprintf("Read block %x,sector %x ,spare %x\r\n",((page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024)/65536,(page-NAND_END_BLOCK*32)%128,(page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK);
+	//rt_kprintf("Read block %x,sector %x ,spare %x\r\n",((page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024)/65536,(page-NAND_END_BLOCK*32)%128,(page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK);
 	return RT_EOK;
 }
 
@@ -293,7 +293,7 @@ static rt_err_t sst39vf_mtd_write (
 
 	}
 	
-	rt_kprintf("Read block %x,sector %x ,spare %x\r\n",((page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024)/65536,(page-NAND_END_BLOCK*32)%128,(page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK);
+//	rt_kprintf("Write block %x,sector %x ,spare %x\r\n",((page-NAND_END_BLOCK*32)*512 + NOR_START_BLOCK*64*1024)/65536,(page-NAND_END_BLOCK*32)%128,(page-NAND_END_BLOCK*32)*16 + NOR_SPARE_BLOCK);
 	return RT_EOK;
 }
 
