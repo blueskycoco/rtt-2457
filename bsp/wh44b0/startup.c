@@ -28,6 +28,11 @@
 #ifdef RT_USING_DFS_ROMFS
 #include <dfs_romfs.h>
 #endif
+#ifdef RT_USING_LWIP
+#include <netif/ethernetif.h>
+#include "rtl8019.h"
+#endif
+
 #if defined(__CC_ARM)
 	extern int Image$$ER_ZI$$ZI$$Base;
 	extern int Image$$ER_ZI$$ZI$$Length;
@@ -304,6 +309,46 @@ void rtthread_startup(void)
 	}
 #endif
 #endif
+
+	/* LwIP Initialization */
+#ifdef RT_USING_LWIP
+		{
+			extern void lwip_sys_init(void);
+			eth_system_device_init();
+	
+			/* register ethernetif device */
+			rt_hw_rtl8019_init();
+	
+			/* re-init device driver */
+			rt_device_init_all();
+	
+			/* init lwip system */
+			lwip_sys_init();
+			rt_kprintf("TCP/IP initialized!\n");
+		}
+#endif
+#if defined(RT_USING_DFS) && defined(RT_USING_LWIP) && defined(RT_USING_DFS_NFS)
+			/* NFSv3 Initialization */
+			nfs_init();
+	
+			if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, RT_NFS_HOST_EXPORT) == 0)
+				rt_kprintf("NFSv3 File System initialized!\n");
+			else
+			{
+				if(flag==1 && mkdir("/nfs",0777)==RT_EOK)
+				{
+					if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, RT_NFS_HOST_EXPORT) == 0)
+					{
+						rt_kprintf("nfs mount on /nfs ok\n");
+					}
+					else
+						rt_kprintf("nfs mount on /nfs failed!\n");
+				}
+				else
+					rt_kprintf("nfs mount on /nfs failed!\n");
+			}
+#endif
+
 	rt_kprintf("init finish\n");
 	/* start scheduler */
 	rt_system_scheduler_start();

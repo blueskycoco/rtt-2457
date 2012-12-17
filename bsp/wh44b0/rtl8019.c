@@ -174,7 +174,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(output_page, e8390_base + EN0_RSARHI);
 
 	outportb(E8390_RWRITE+E8390_START, e8390_base + E8390_CMD);
-	rt_memcpy(e8390_base+EN0_DATAPORT,(rt_uint16_t *)data,send_length>>1);
+	rt_memcpy((rt_uint16_t *)(e8390_base+EN0_DATAPORT),(rt_uint16_t *)data,send_length>>1);
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
 		RTL8019_TRACE("Waiting for ENISR_RDC int\n");
@@ -277,7 +277,7 @@ static void ne_block_input(rt_uint32_t count ,struct pbuf *p, int ring_offset)
 	outportb(ring_offset >> 8, e8390_base + EN0_RSARHI);
 	outportb(E8390_RREAD+E8390_START, e8390_base + E8390_CMD);
 	//insw(NE_BASE + NE_DATAPORT,buf,count>>1);
-	rt_uint16_t index=e8390_base+EN0_DATAPORT;
+	rt_uint32_t index=e8390_base+EN0_DATAPORT;
 	
 	if(p == RT_NULL)
 	{
@@ -301,7 +301,7 @@ static void ne_block_input(rt_uint32_t count ,struct pbuf *p, int ring_offset)
 			rt_memcpy(q->payload,(rt_uint16_t *)index,q->len>>1);			
 			if (q->len & 0x01)
 			{
-				q->payload[q->len - 1] = inportb((rt_uint8_t *)(index+1));
+				((rt_uint8_t *)q->payload)[q->len - 1] = inportb((rt_uint8_t *)(index+1));
 			}
 			index = index + q->len;
 		}
@@ -374,11 +374,11 @@ static void ei_receive()
 			g_pbuf = pbuf_alloc(PBUF_LINK, pkt_len, PBUF_RAM);
 			if (g_pbuf != RT_NULL)
 			{
-				ne_block_input(0,g_pbuf,current_offset + sizeof(rx_frame))
+				ne_block_input(0,g_pbuf,current_offset + sizeof(rx_frame));
 			}
 			else
 			{
-				ne_block_input(pkt_len,RT_NULL,current_offset + sizeof(rx_frame))
+				ne_block_input(pkt_len,RT_NULL,current_offset + sizeof(rx_frame));
 			}
 
 		}
@@ -608,7 +608,7 @@ void rt_rtl8019_isr(int irqno)
 	} 
 	else 
 	{
-		RTL8019_TRACE(KERN_WARNING "<rt_rtl8019_isr> unknown interrupt %#2x\n",  interrupts);
+		RTL8019_TRACE("<rt_rtl8019_isr> unknown interrupt %#2x\n",  interrupts);
 		outportb(0xff, e8390_base + EN0_ISR); /* Ack. all intrs. */
 	}
 
@@ -733,7 +733,7 @@ void INTEINT1_handler(int irqno)
     }
 
 	/* clear EINT pending bit */
-	EINTPEND = eint_pend;
+	INTPND = eint_pend;
 }
 
 void rt_hw_rtl8019_init()
@@ -741,9 +741,6 @@ void rt_hw_rtl8019_init()
 
 	rt_sem_init(&sem_tx_done, "tx_done", 1, RT_IPC_FLAG_FIFO);
 	rt_sem_init(&sem_lock, "eth_lock", 1, RT_IPC_FLAG_FIFO);
-
-	rtl8019_device.packet_cnt = 0;
-	rtl8019_device.queue_packet_len = 0;
 
 	/*
 	 * SRAM Tx/Rx pointer automatically return to start address,

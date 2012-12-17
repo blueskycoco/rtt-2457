@@ -27,6 +27,7 @@
 //#define RT_USING_DFS_JFFS2
 #define RT_USING_MTD_NAND
 #define RT_USING_DFS_UFFS
+#define RT_USING_DFS_NFS
 
 /* the max number of mounted filesystem */
 #define DFS_FILESYSTEMS_MAX			10
@@ -94,10 +95,24 @@
 
 /* SECTION: lwip, a lighwight TCP/IP protocol stack */
 /* Using lighweight TCP/IP protocol stack*/
-/* #define RT_USING_LWIP */
+#define RT_USING_LWIP
+#define RT_LWIP_USING_RT_MEM
+#define RT_LWIP_TCP_PCB_NUM	5
+#define RT_LWIP_TCP_SND_BUF	8192
+#define RT_LWIP_TCP_WND	8192
+#define RT_LWIP_TCP_SEG_NUM	40
+#define RT_LWIP_TCPTHREAD_PRIORITY	12
+#define RT_LWIP_TCPTHREAD_MBOX_SIZE	32
+#define RT_LWIP_TCPTHREAD_STACKSIZE	4096
+#define RT_LWIP_ETHTHREAD_PRIORITY	144
+#define RT_LWIP_ETHTHREAD_MBOX_SIZE	32
+#define RT_LWIP_ETHTHREAD_STACKSIZE	512
+#define RT_NFS_HOST_EXPORT	"192.168.0.5:/"
+
 
 /* Trace LwIP protocol*/
 /* #define RT_LWIP_DEBUG */
+#define RT_LWIP_DNS
 
 /* Enable ICMP protocol*/
 #define RT_LWIP_ICMP

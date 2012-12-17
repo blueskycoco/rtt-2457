@@ -165,4 +165,7 @@
 #define ETH_FRAME_LEN	1514		/* Max. octets in frame sans FCS */
 #define ETH_FCS_LEN	4		/* Octets in the FCS*/
 #define TX_PAGES 12
+
+void rt_hw_rtl8019_init(void);
+
 #endif
