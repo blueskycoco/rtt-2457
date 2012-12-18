@@ -74,11 +74,196 @@ static void NS8390_trigger_send(rt_uint32_t length,rt_int32_t start_page)
 	outportb(start_page, e8390_base + EN0_TPSR);
 	outportb(E8390_NODMA+E8390_TRANS+E8390_START, e8390_base+E8390_CMD);
 }
+/* ethernet device interface */
+/* transmit packet. */
+rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
+{	
+	rt_uint32_t send_length = p->tot_len, output_page;
+	rt_uint8_t *data;
+	struct pbuf* q;
+	RTL8019_TRACE("rtl8019 tx: %d\n", p->tot_len);
+	/* lock RTL8019 device */
+	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
+	q=p;
+	if(q->tot_len < ETH_ZLEN)
+	{
 
-void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
+		data=(rt_uint8_t *)rt_malloc(ETH_ZLEN);
+		rt_memset(data, 0, ETH_ZLEN);	// more efficient than doing just the needed bits 
+		send_length=ETH_ZLEN;
+	}
+	else
+	{
+		if(q->tot_len&1)
+			send_length=q->tot_len+1;
+		else
+			send_length=q->tot_len;
+		data=(rt_uint8_t *)rt_malloc(send_length);
+		rt_memset(data, 0, send_length);	// more efficient than doing just the needed bits 
+	}
+	while(q != RT_NULL)
+	{
+		rt_uint32_t i;
+		RTL8019_TRACE("rtl8019 tx 3 %d %d\n",q->len,send_length);
+		for(i=0;i<q->len;i++)
+		{
+			RTL8019_TRACE(" %d ",((rt_uint8_t *)q->payload)[i]);
+		}
+		RTL8019_TRACE("\ndata \n");
+		rt_memcpy((rt_uint8_t *)data, (rt_uint8_t *)q->payload, q->len);
+		for(i=0;i<q->len;i++)
+		{
+			RTL8019_TRACE(" %d ",data[i]);
+		}
+		data=data+q->len;
+		q=q->next;
+	}
+	
+	outportb(0x00, e8390_base + EN0_IMR);
+	rtl8019_device.irqlock = 1;
+	/*
+	 * We have two Tx slots available for use. Find the first free
+	 * slot, and then perform some sanity checks. With two Tx bufs,
+	 * you get very close to transmitting back-to-back packets. With
+	 * only one Tx buf, the transmitter sits idle while you reload the
+	 * card, leaving a substantial gap between each transmitted packet.
+	 */
+
+	if (rtl8019_device.tx1 == 0)
+	{
+		output_page = rtl8019_device.tx_start_page;
+		rtl8019_device.tx1 = send_length;
+		if (rtl8019_device.tx2 > 0)
+			RTL8019_TRACE(" idle transmitter tx2=%d, lasttx=%d, txing=%d.\n",rtl8019_device.tx2, rtl8019_device.lasttx, rtl8019_device.txing);
+	}
+	else if (rtl8019_device.tx2 == 0)
+	{
+		output_page = rtl8019_device.tx_start_page + TX_PAGES/2;
+		rtl8019_device.tx2 = send_length;
+		if (rtl8019_device.tx1 > 0)
+			RTL8019_TRACE("idle transmitter, tx1=%d, lasttx=%d, txing=%d.\n",rtl8019_device.tx1, rtl8019_device.lasttx, rtl8019_device.txing);
+	}
+	else
+	{	/* We should never get here. */
+		
+		RTL8019_TRACE(" No Tx buffers free! tx1=%d tx2=%d last=%d\n",rtl8019_device.tx1, rtl8019_device.tx2, rtl8019_device.lasttx);
+		rtl8019_device.irqlock = 0;
+		outportb(ENISR_ALL, e8390_base + EN0_IMR);
+		/* unlock RTL8019 device */
+		rt_sem_release(&sem_lock);
+		return RT_ERROR;
+	}
+
+	/*
+	 * Okay, now upload the packet and trigger a send if the transmitter
+	 * isn't already sending. If it is busy, the interrupt handler will
+	 * trigger the send later, upon receiving a Tx done interrupt.
+	 */
+
+	//ne_block_output(send_length, p, output_page);
+
+	/* This *shouldn't* happen. If it does, it's the last thing you'll see */
+	if (rtl8019_device.dmaing)
+	{
+		RTL8019_TRACE(" DMAing conflict in ne_block_output."
+			"[DMAstat:%d][irqlock:%d]\n",
+			rtl8019_device.dmaing, rtl8019_device.irqlock);
+		rtl8019_device.irqlock = 0;
+		outportb(ENISR_ALL, e8390_base + EN0_IMR);
+		/* unlock RTL8019 device */
+		rt_sem_release(&sem_lock);
+		return RT_ERROR;
+	}
+	rtl8019_device.dmaing |= 0x01;
+	/* We should already be in page 0, but to be safe... */
+	outportb(E8390_PAGE0+E8390_START+E8390_NODMA, e8390_base + E8390_CMD);
+
+	outportb(ENISR_RDC, e8390_base + EN0_ISR);
+
+	/* Now the normal output. */
+	outportb(send_length& 0xff, e8390_base + EN0_RCNTLO);
+	outportb(send_length>> 8,   e8390_base + EN0_RCNTHI);
+	outportb(0x00, e8390_base + EN0_RSARLO);
+	outportb(output_page, e8390_base + EN0_RSARHI);
+
+	outportb(E8390_RWRITE+E8390_START, e8390_base + E8390_CMD);
+	rt_uint32_t i;
+	for(i=0;i<send_length/2;i++)
+		outportw(((rt_uint16_t *)data)[i],e8390_base+EN0_DATAPORT);
+	//rt_memcpy((volatile rt_uint16_t *)(e8390_base+EN0_DATAPORT),(rt_uint16_t *)data,send_length>>1);
+	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
+	{
+		//RTL8019_TRACE("Waiting for ENISR_RDC int\n");
+		delay_ms(20);
+	}
+
+	//RTL8019_TRACE("rtl8019 tx jjj\n");
+	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
+	rtl8019_device.dmaing &= ~0x01;
+
+	if (!rtl8019_device.txing)
+	{
+		rtl8019_device.txing = 1;
+		NS8390_trigger_send(send_length, output_page);
+		if (output_page == rtl8019_device.tx_start_page)
+		{
+			rtl8019_device.tx1 = -1;
+			rtl8019_device.lasttx = -1;
+		}
+		else
+		{
+			rtl8019_device.tx2 = -1;
+			rtl8019_device.lasttx = -2;
+		}
+	}
+	else rtl8019_device.txqueue++;
+	
+	//wait for tx int occur
+	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
+	//RTL8019_TRACE("rtl8019 ttx done\n");
+	/* Turn 8390 interrupts back on. */
+	rtl8019_device.irqlock = 0;
+	outportb(ENISR_ALL, e8390_base + EN0_IMR);
+	//RTL8019_TRACE("rtl8019 ttxx done\n");
+	/* unlock RTL8019 device */
+	rt_sem_release(&sem_lock);
+
+	RTL8019_TRACE("111 tx done\n");
+
+	return RT_EOK;
+}
+
+/* reception packet. */
+struct pbuf *rt_rtl8019_rx(rt_device_t dev)
+{
+	
+	struct pbuf *p = RT_NULL;
+	//wait for uplayer to read back
+	rt_sem_release(&sem_lock);
+	if(g_pbuf!=RT_NULL)
+		{
+			rt_uint32_t i;
+			p=pbuf_alloc(PBUF_LINK, g_pbuf->tot_len, PBUF_RAM);
+			rt_memcpy(p,g_pbuf,g_pbuf->tot_len);
+			while(g_pbuf!=RT_NULL)
+			{
+				for(i=0;i<g_pbuf->len;i++)
+					RTL8019_TRACE("%d ",((rt_uint8_t *)g_pbuf->payload)[i]);
+				RTL8019_TRACE("\n");
+				g_pbuf=g_pbuf->next;
+			}
+			
+			//pbuf_free(g_pbuf);
+			return p;
+		}
+	else
+		return RT_NULL;
+}
+
+static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
 {
 	/* This *shouldn't* happen. If it does, it's the last thing you'll see */
-	rt_uint32_t i;
+
 	if (rtl8019_device.dmaing)
 	{
 		RTL8019_TRACE("<ei_get_8390_hdr> DMAing conflict in ne_get_8390_hdr [DMAstat:%d][irqlock:%d].\n",rtl8019_device.dmaing, rtl8019_device.irqlock);
@@ -93,16 +278,21 @@ void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
 	outportb(ring_page, e8390_base + EN0_RSARHI);
 	outportb(E8390_RREAD+E8390_START, e8390_base + E8390_CMD);
 
+	//insw(NE_BASE + NE_DATAPORT, hdr, sizeof(struct e8390_pkt_hdr)>>1);
+	//rt_memcpy(hdr,(rt_uint16_t *)(e8390_base+EN0_DATAPORT),sizeof(struct e8390_pkt_hdr)>>1);
+	rt_uint32_t i;
 	for(i=0;i<sizeof(struct e8390_pkt_hdr)>>1;i++)
 		((rt_uint16_t *)hdr)[i]=inportw(e8390_base+EN0_DATAPORT);
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
 
+	//le16_to_cpus(&hdr->count);
+	RTL8019_TRACE("<ei_get_8390_hdr> hdr->count = %d\n",hdr->count);
 }
-struct pbuf *ne_block_input(rt_uint32_t count , int ring_offset)
+static void ne_block_input(rt_uint32_t count ,struct pbuf *p, int ring_offset)
 {
 
-	struct pbuf *p,*q;
+	struct pbuf *q;
 	/* This *shouldn't* happen. If it does, it's the last thing you'll see */
 	if (rtl8019_device.dmaing)
 	{
@@ -110,50 +300,64 @@ struct pbuf *ne_block_input(rt_uint32_t count , int ring_offset)
 		return;
 	}
 	rtl8019_device.dmaing |= 0x01;
-	
-	/* allocate buffer */
-	p = pbuf_alloc(PBUF_LINK, count, PBUF_RAM);
-	RTL8019_TRACE("pkt_len %d , g_pbuf->tot_len %d , g_pbuf->len %d\n",count,g_pbuf->tot_len,g_pbuf->len);
 	outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base+ E8390_CMD);
-	outportb(count& 0xff, e8390_base + EN0_RCNTLO);
-	outportb(count>> 8, e8390_base + EN0_RCNTHI);
+	if(p == RT_NULL)
+	{
+		outportb(count& 0xff, e8390_base + EN0_RCNTLO);
+		outportb(count>> 8, e8390_base + EN0_RCNTHI);
+	}
+	else
+	{
+		outportb(p->tot_len& 0xff, e8390_base + EN0_RCNTLO);
+		outportb(p->tot_len>> 8, e8390_base + EN0_RCNTHI);
+	}
 	outportb(ring_offset & 0xff, e8390_base + EN0_RSARLO);
 	outportb(ring_offset >> 8, e8390_base + EN0_RSARHI);
 	outportb(E8390_RREAD+E8390_START, e8390_base + E8390_CMD);
+	//insw(NE_BASE + NE_DATAPORT,buf,count>>1);
+	rt_uint32_t index=e8390_base+EN0_DATAPORT;
 	
 	if(p == RT_NULL)
 	{
 		rt_uint16_t dummy;
 		while(count)
 		{
-			dummy=inportw(e8390_base+EN0_DATAPORT);
+			dummy=inportw((rt_uint16_t *)index);
 			count=count-2;
+			//index=index+1;
 		}
+		if (count & 0x01)
+		{
+			dummy = inportb((rt_uint8_t *)(index+1));
+		}
+
 	}
 	else
 	{
 		rt_uint32_t i;
-		rt_uint16_t *data;
 		for(q=p;q!=RT_NULL;q=q->next)
 		{
-			data=(rt_uint16_t *)q->payload;
 			for(i=0;i<q->len>>1;i++)
-				data[i] = inportw(e8390_base+EN0_DATAPORT);
+				((rt_uint16_t *)q->payload)[i] = inportw(e8390_base+EN0_DATAPORT);
+			//rt_memcpy(q->payload,(rt_uint16_t *)index,q->len>>1);			
+			if (q->len & 0x01)
+			{
+				((rt_uint8_t *)q->payload)[q->len - 1] = inportb(e8390_base+EN0_DATAPORT);
+			}
+			//index = index + q->len;
 		}
 	}
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
-	return p;
 }
-
-struct pbuf *ei_receive()
+static void ei_receive()
 {
 	rt_uint8_t rxing_page, this_frame, next_frame;
 	rt_uint16_t current_offset;
 	rt_uint32_t rx_pkt_count = 0;
-	struct pbuf *p;
 	struct e8390_pkt_hdr rx_frame;
-	RTL8019_TRACE("ei_receive==>\n");
+	
+	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	int num_rx_pages = rtl8019_device.stop_page-rtl8019_device.rx_start_page;
 	while (++rx_pkt_count < 10)
 	{
@@ -207,7 +411,16 @@ struct pbuf *ei_receive()
 		}
 		 else if ((pkt_stat & 0x0F) == ENRSR_RXOK)
 		{
-			p =	ne_block_input(pkt_len,current_offset + sizeof(rx_frame));			
+			/* allocate buffer */
+			g_pbuf = pbuf_alloc(PBUF_LINK, pkt_len, PBUF_RAM);
+			if (g_pbuf != RT_NULL)
+			{
+				ne_block_input(0,g_pbuf,current_offset + sizeof(rx_frame));
+			}
+			else
+			{
+				ne_block_input(pkt_len,RT_NULL,current_offset + sizeof(rx_frame));
+			}
 
 		}
 		else
@@ -228,205 +441,9 @@ struct pbuf *ei_receive()
 	/* We used to also ack ENISR_OVER here, but that would sometimes mask
 	   a real overrun, leaving the 8390 in a stopped state with rec'vr off. */
 	outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);
-	RTL8019_TRACE("ei_receive<==\n");
-	return p;
+	
+	return;
 }
-
-/* reception packet. */
-struct pbuf *rt_rtl8019_rx(rt_device_t dev)
-{
-
-	struct pbuf *p = RT_NULL,*q;
-	
-	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
-	RTL8019_TRACE("rtl8019 rx ==>\n");
-
-	//wait for uplayer to read back
-	p=ei_receive();
-	if(p!=RT_NULL)
-	{
-		rt_uint32_t i;	
-		q=p;
-		RTL8019_TRACE("rx tot_len %d \nbuf :\n",q->tot_len);
-		while(q!=RT_NULL)
-		{
-			for(i=0;i<q->len;i++)
-			{
-				RTL8019_TRACE("%2d ",((rt_uint8_t *)q->payload)[i]);
-				if(i%5==0 && i!=0)
-					RTL8019_TRACE("\n");	
-			}
-	
-			q=q->next;
-		}
-		rt_sem_release(&sem_lock);
-		RTL8019_TRACE("rtl8019 rx <==\n");
-		return p;
-	}
-	rt_sem_release(&sem_lock);
-	RTL8019_TRACE("rtl8019 rx <== error\n");
-	return RT_NULL;
-}
-
-/* ethernet device interface */
-/* transmit packet. */
-rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
-{	
-	rt_uint32_t send_length = p->tot_len, output_page;
-	rt_uint8_t *data;	
-	rt_uint32_t i=0,j=0;
-	struct pbuf* q;
-	RTL8019_TRACE("rtl8019 tx ==>\n");
-	/* lock RTL8019 device */
-	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
-	q=p;
-	if(q->tot_len < ETH_ZLEN)
-	{
-
-		data=(rt_uint8_t *)rt_malloc(ETH_ZLEN);
-		rt_memset(data, 0, ETH_ZLEN);	// more efficient than doing just the needed bits 
-		send_length=ETH_ZLEN;
-	}
-	else
-	{
-		if(q->tot_len&1)
-			send_length=q->tot_len+1;
-		else
-			send_length=q->tot_len;
-		data=(rt_uint8_t *)rt_malloc(send_length);
-		rt_memset(data, 0, send_length);	// more efficient than doing just the needed bits 
-	}
-	
-	RTL8019_TRACE("tx total length %d tot_len %d \nbuf :\n",send_length,q->tot_len);
-	while(q != RT_NULL)
-	{
-		j=i+q->len;
-		rt_memcpy((rt_uint8_t *)data, (rt_uint8_t *)q->payload, q->len);
-		data=data+q->len;
-		for(;i<j;i++)
-		{
-			RTL8019_TRACE(" %2d ",data[i]);
-			if(i%5==0 && i!=0)
-				RTL8019_TRACE("\n");
-		}		
-		q=q->next;
-		
-	}
-	
-	outportb(0x00, e8390_base + EN0_IMR);
-	rtl8019_device.irqlock = 1;
-	/*
-	 * We have two Tx slots available for use. Find the first free
-	 * slot, and then perform some sanity checks. With two Tx bufs,
-	 * you get very close to transmitting back-to-back packets. With
-	 * only one Tx buf, the transmitter sits idle while you reload the
-	 * card, leaving a substantial gap between each transmitted packet.
-	 */
-
-	if (rtl8019_device.tx1 == 0)
-	{
-		output_page = rtl8019_device.tx_start_page;
-		rtl8019_device.tx1 = send_length;
-		if (rtl8019_device.tx2 > 0)
-			RTL8019_TRACE(" idle transmitter tx2=%d, lasttx=%d, txing=%d.\n",rtl8019_device.tx2, rtl8019_device.lasttx, rtl8019_device.txing);
-	}
-	else if (rtl8019_device.tx2 == 0)
-	{
-		output_page = rtl8019_device.tx_start_page + TX_PAGES/2;
-		rtl8019_device.tx2 = send_length;
-		if (rtl8019_device.tx1 > 0)
-			RTL8019_TRACE("idle transmitter, tx1=%d, lasttx=%d, txing=%d.\n",rtl8019_device.tx1, rtl8019_device.lasttx, rtl8019_device.txing);
-	}
-	else
-	{	/* We should never get here. */
-		
-		RTL8019_TRACE(" No Tx buffers free! tx1=%d tx2=%d last=%d\n",rtl8019_device.tx1, rtl8019_device.tx2, rtl8019_device.lasttx);
-		rtl8019_device.irqlock = 0;
-		outportb(ENISR_ALL, e8390_base + EN0_IMR);
-		rt_free(data);
-		/* unlock RTL8019 device */
-		rt_sem_release(&sem_lock);
-		return RT_ERROR;
-	}
-
-	/*
-	 * Okay, now upload the packet and trigger a send if the transmitter
-	 * isn't already sending. If it is busy, the interrupt handler will
-	 * trigger the send later, upon receiving a Tx done interrupt.
-	 */
-
-	//ne_block_output(send_length, p, output_page);
-
-	/* This *shouldn't* happen. If it does, it's the last thing you'll see */
-	if (rtl8019_device.dmaing)
-	{
-		RTL8019_TRACE(" DMAing conflict in ne_block_output. [DMAstat:%d][irqlock:%d]\n",rtl8019_device.dmaing, rtl8019_device.irqlock);
-		rtl8019_device.irqlock = 0;
-		outportb(ENISR_ALL, e8390_base + EN0_IMR);
-		rt_free(data);
-		/* unlock RTL8019 device */
-		rt_sem_release(&sem_lock);
-		return RT_ERROR;
-	}
-	rtl8019_device.dmaing |= 0x01;
-	/* We should already be in page 0, but to be safe... */
-	outportb(E8390_PAGE0+E8390_START+E8390_NODMA, e8390_base + E8390_CMD);
-
-	outportb(ENISR_RDC, e8390_base + EN0_ISR);
-
-	/* Now the normal output. */
-	outportb(send_length& 0xff, e8390_base + EN0_RCNTLO);
-	outportb(send_length>> 8,   e8390_base + EN0_RCNTHI);
-	outportb(0x00, e8390_base + EN0_RSARLO);
-	outportb(output_page, e8390_base + EN0_RSARHI);
-
-	outportb(E8390_RWRITE+E8390_START, e8390_base + E8390_CMD);
-	for(i=0;i<send_length/2;i++)
-		outportw(((rt_uint16_t *)data)[i],e8390_base+EN0_DATAPORT);
-	//rt_memcpy((volatile rt_uint16_t *)(e8390_base+EN0_DATAPORT),(rt_uint16_t *)data,send_length>>1);
-	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
-	{
-		//RTL8019_TRACE("Waiting for ENISR_RDC int\n");
-		delay_ms(20);
-	}
-
-	//RTL8019_TRACE("rtl8019 tx jjj\n");
-	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
-	rtl8019_device.dmaing &= ~0x01;
-
-	if (!rtl8019_device.txing)
-	{
-		rtl8019_device.txing = 1;
-		NS8390_trigger_send(send_length, output_page);
-		if (output_page == rtl8019_device.tx_start_page)
-		{
-			rtl8019_device.tx1 = -1;
-			rtl8019_device.lasttx = -1;
-		}
-		else
-		{
-			rtl8019_device.tx2 = -1;
-			rtl8019_device.lasttx = -2;
-		}
-	}
-	else rtl8019_device.txqueue++;
-	
-	//wait for tx int occur
-	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
-
-	/* Turn 8390 interrupts back on. */
-	rtl8019_device.irqlock = 0;
-	outportb(ENISR_ALL, e8390_base + EN0_IMR);
-	rt_free(data);
-
-	/* unlock RTL8019 device */
-	rt_sem_release(&sem_lock);
-
-	RTL8019_TRACE("rt_rtl8019_tx<==\n");
-
-	return RT_EOK;
-}
-
 static void ei_rx_overrun()
 {
 	rt_uint8_t was_txing, must_resend = 0;
@@ -477,7 +494,7 @@ static void ei_rx_overrun()
 	/*
 	 * Clear the Rx ring of all the debris, and ack the interrupt.
 	 */
-	//ei_receive();
+	ei_receive();
 	eth_device_ready(&(rtl8019_device.parent));
 	outportb(ENISR_OVER, e8390_base+EN0_ISR);
 
@@ -575,8 +592,10 @@ void rt_rtl8019_isr(int irqno)
 	 */
 	if (rtl8019_device.irqlock)
 	{
+		#if 1 /* This might just be an interrupt for a PCI device sharing this line */
 		/* The "irqlock" check is only for testing. */
 		RTL8019_TRACE("<rt_rtl8019_isr> Interrupted while interrupts are masked! isr=%#2x imr=%#2x.\n",inportb(e8390_base + EN0_ISR),inportb(e8390_base + EN0_IMR));
+		#endif
 			return ;
 	}
 
@@ -594,6 +613,7 @@ void rt_rtl8019_isr(int irqno)
 		else if (interrupts & (ENISR_RX+ENISR_RX_ERR))
 		{
 			/* Got a good (?) packet. */
+		    ei_receive();
 			//ask lwip to receive data
 			eth_device_ready(&(rtl8019_device.parent));
 		}
@@ -616,21 +636,19 @@ void rt_rtl8019_isr(int irqno)
 
 		outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base + E8390_CMD);
 	}
-	if(interrupts)
+
+	outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base + E8390_CMD);
+	if (nr_serviced >= MAX_SERVICE)
 	{
-		outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base + E8390_CMD);
-		if (nr_serviced >= MAX_SERVICE)
-		{
-			/* 0xFF is valid for a card removal */
-			if(interrupts!=0xFF)
-				RTL8019_TRACE("<rt_rtl8019_isr> Too much work at interrupt, status %#2.2x\n",interrupts);
-			outportb(ENISR_ALL, e8390_base + EN0_ISR); /* Ack. most intrs. */
-		} 
-		else 
-		{
-			RTL8019_TRACE("<rt_rtl8019_isr> unknown interrupt %#2x\n",  interrupts);
-			outportb(0xff, e8390_base + EN0_ISR); /* Ack. all intrs. */
-		}
+		/* 0xFF is valid for a card removal */
+		if(interrupts!=0xFF)
+			RTL8019_TRACE("<rt_rtl8019_isr> Too much work at interrupt, status %#2.2x\n",interrupts);
+		outportb(ENISR_ALL, e8390_base + EN0_ISR); /* Ack. most intrs. */
+	} 
+	else 
+	{
+		RTL8019_TRACE("<rt_rtl8019_isr> unknown interrupt %#2x\n",  interrupts);
+		outportb(0xff, e8390_base + EN0_ISR); /* Ack. all intrs. */
 	}
 
 }
@@ -645,18 +663,18 @@ static rt_err_t rt_rtl8019_init(rt_device_t dev)
 	rtl8019_device.stop_page=0x80;
 	rtl8019_device.rx_start_page = 0x4c;
 	
-	//unsigned long reset_start_time = jiffies;
+		//unsigned long reset_start_time = jiffies;
 
-	/* DON'T change these to inb_p/outb_p or reset will fail on clones. */
-	outportb(inportb(e8390_base + NE_RESET), e8390_base + NE_RESET);
+		/* DON'T change these to inb_p/outb_p or reset will fail on clones. */
+		outportb(inportb(e8390_base + NE_RESET), e8390_base + NE_RESET);
 
-	while ((inportb(e8390_base + EN0_ISR) & ENISR_RESET) == 0)
-	{
-			RTL8019_TRACE("reseting rtl8019 ...\n");
-			delay_ms(500);
-	}
+		while ((inportb(e8390_base + EN0_ISR) & ENISR_RESET) == 0)
+		{
+				RTL8019_TRACE("reseting rtl8019 ...\n");
+				delay_ms(500);
+		}
 
-	outportb(0xff, e8390_base + EN0_ISR);		/* Ack all intr. */
+		outportb(0xff, e8390_base + EN0_ISR);		/* Ack all intr. */
 	outportb(0x49, e8390_base + EN0_DCFG);
 	
 	/* Follow National Semi's recommendations for initing the DP83902. */
