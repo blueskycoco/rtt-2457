@@ -80,10 +80,12 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 {	
 	rt_uint32_t send_length = p->tot_len, output_page;
 	rt_uint8_t *data;
+	struct pbuf* q;
 	RTL8019_TRACE("rtl8019 tx: %d\n", p->tot_len);
 	/* lock RTL8019 device */
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
-	if(p->tot_len < ETH_ZLEN)
+	q=p;
+	if(q->tot_len < ETH_ZLEN)
 	{
 
 		data=(rt_uint8_t *)rt_malloc(ETH_ZLEN);
@@ -92,18 +94,29 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	}
 	else
 	{
-		if(p->tot_len&1)
-			send_length=p->tot_len+1;
+		if(q->tot_len&1)
+			send_length=q->tot_len+1;
 		else
-			send_length=p->tot_len;
+			send_length=q->tot_len;
 		data=(rt_uint8_t *)rt_malloc(send_length);
 		rt_memset(data, 0, send_length);	// more efficient than doing just the needed bits 
 	}
-	while(p)
+	while(q != RT_NULL)
 	{
-		rt_memcpy(data, (rt_uint8_t *)p->payload, p->len);
-		p=p->next;
-		data=data+p->len;
+		rt_uint32_t i;
+		RTL8019_TRACE("rtl8019 tx 3 %d %d\n",q->len,send_length);
+		for(i=0;i<q->len;i++)
+		{
+			RTL8019_TRACE(" %d ",((rt_uint8_t *)q->payload)[i]);
+		}
+		RTL8019_TRACE("\ndata \n");
+		rt_memcpy((rt_uint8_t *)data, (rt_uint8_t *)q->payload, q->len);
+		for(i=0;i<q->len;i++)
+		{
+			RTL8019_TRACE(" %d ",data[i]);
+		}
+		data=data+q->len;
+		q=q->next;
 	}
 	
 	outportb(0x00, e8390_base + EN0_IMR);
@@ -174,13 +187,17 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(output_page, e8390_base + EN0_RSARHI);
 
 	outportb(E8390_RWRITE+E8390_START, e8390_base + E8390_CMD);
-	rt_memcpy((rt_uint16_t *)(e8390_base+EN0_DATAPORT),(rt_uint16_t *)data,send_length>>1);
+	rt_uint32_t i;
+	for(i=0;i<send_length/2;i++)
+		outportw(((rt_uint16_t *)data)[i],e8390_base+EN0_DATAPORT);
+	//rt_memcpy((volatile rt_uint16_t *)(e8390_base+EN0_DATAPORT),(rt_uint16_t *)data,send_length>>1);
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
-		RTL8019_TRACE("Waiting for ENISR_RDC int\n");
+		//RTL8019_TRACE("Waiting for ENISR_RDC int\n");
 		delay_ms(20);
 	}
 
+	//RTL8019_TRACE("rtl8019 tx jjj\n");
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
 
@@ -203,13 +220,15 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	
 	//wait for tx int occur
 	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
+	//RTL8019_TRACE("rtl8019 ttx done\n");
 	/* Turn 8390 interrupts back on. */
 	rtl8019_device.irqlock = 0;
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
+	//RTL8019_TRACE("rtl8019 ttxx done\n");
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
 
-	RTL8019_TRACE("rtl8019 tx done\n");
+	RTL8019_TRACE("111 tx done\n");
 
 	return RT_EOK;
 }
@@ -217,10 +236,25 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 /* reception packet. */
 struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 {
+	
+	struct pbuf *p = RT_NULL;
 	//wait for uplayer to read back
 	rt_sem_release(&sem_lock);
 	if(g_pbuf!=RT_NULL)
-		return g_pbuf;
+		{
+			/*rt_uint32_t i;
+			while(g_pbuf!=RT_NULL)
+			{
+				for(i=0;i<g_pbuf->len;i++)
+					RTL8019_TRACE("%d ",((rt_uint8_t *)g_pbuf->payload)[i]);
+				RTL8019_TRACE("\n");
+				g_pbuf=g_pbuf->next;
+			}*/
+			p=pbuf_alloc(PBUF_LINK, g_pbuf->tot_len, PBUF_RAM);
+			rt_memcpy(p,g_pbuf,g_pbuf->tot_len);
+			//pbuf_free(g_pbuf);
+			return p;
+		}
 	else
 		return RT_NULL;
 }
@@ -244,7 +278,10 @@ static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
 	outportb(E8390_RREAD+E8390_START, e8390_base + E8390_CMD);
 
 	//insw(NE_BASE + NE_DATAPORT, hdr, sizeof(struct e8390_pkt_hdr)>>1);
-	rt_memcpy(hdr,(rt_uint16_t *)(e8390_base+EN0_DATAPORT),sizeof(struct e8390_pkt_hdr)>>1);
+	//rt_memcpy(hdr,(rt_uint16_t *)(e8390_base+EN0_DATAPORT),sizeof(struct e8390_pkt_hdr)>>1);
+	rt_uint32_t i;
+	for(i=0;i<sizeof(struct e8390_pkt_hdr)>>1;i++)
+		((rt_uint16_t *)hdr)[i]=inportw(e8390_base+EN0_DATAPORT);
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
 
@@ -286,7 +323,7 @@ static void ne_block_input(rt_uint32_t count ,struct pbuf *p, int ring_offset)
 		{
 			dummy=inportw((rt_uint16_t *)index);
 			count=count-2;
-			index=index+1;
+			//index=index+1;
 		}
 		if (count & 0x01)
 		{
@@ -296,14 +333,17 @@ static void ne_block_input(rt_uint32_t count ,struct pbuf *p, int ring_offset)
 	}
 	else
 	{
+		rt_uint32_t i;
 		for(q=p;q!=RT_NULL;q=q->next)
 		{
-			rt_memcpy(q->payload,(rt_uint16_t *)index,q->len>>1);			
+			for(i=0;i<q->len>>1;i++)
+				((rt_uint16_t *)q->payload)[i] = inportw(e8390_base+EN0_DATAPORT);
+			//rt_memcpy(q->payload,(rt_uint16_t *)index,q->len>>1);			
 			if (q->len & 0x01)
 			{
-				((rt_uint8_t *)q->payload)[q->len - 1] = inportb((rt_uint8_t *)(index+1));
+				((rt_uint8_t *)q->payload)[q->len - 1] = inportb(e8390_base+EN0_DATAPORT);
 			}
-			index = index + q->len;
+			//index = index + q->len;
 		}
 	}
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
@@ -399,7 +439,8 @@ static void ei_receive()
 
 	/* We used to also ack ENISR_OVER here, but that would sometimes mask
 	   a real overrun, leaving the 8390 in a stopped state with rec'vr off. */
-	outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);	
+	outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);
+	
 	return;
 }
 static void ei_rx_overrun()
@@ -509,6 +550,7 @@ static void ei_tx_intr()
 
 
 	rt_sem_release(&sem_tx_done);
+	RTL8019_TRACE("we release the sem_tx_done\n");
 }
 
 static void ei_tx_err()
@@ -551,11 +593,7 @@ void rt_rtl8019_isr(int irqno)
 	{
 		#if 1 /* This might just be an interrupt for a PCI device sharing this line */
 		/* The "irqlock" check is only for testing. */
-		RTL8019_TRACE(rtl8019_device.irqlock
-			   ? "<rt_rtl8019_isr> Interrupted while interrupts are masked! isr=%#2x imr=%#2x.\n"
-			   : "<rt_rtl8019_isr> Reentering the interrupt handler! isr=%#2x imr=%#2x.\n",
-			    inportb(e8390_base + EN0_ISR),
-			   inportb(e8390_base + EN0_IMR));
+		RTL8019_TRACE("<rt_rtl8019_isr> Interrupted while interrupts are masked! isr=%#2x imr=%#2x.\n",inportb(e8390_base + EN0_ISR),inportb(e8390_base + EN0_IMR));
 		#endif
 			return ;
 	}
@@ -619,9 +657,25 @@ void rt_rtl8019_isr(int irqno)
 static rt_err_t rt_rtl8019_init(rt_device_t dev)
 {
 	int i;
+	RTL8019_TRACE("rtl8019 init:\n");
 	rtl8019_device.tx_start_page = 0x40;
 	rtl8019_device.stop_page=0x80;
 	rtl8019_device.rx_start_page = 0x4c;
+	
+		//unsigned long reset_start_time = jiffies;
+
+		/* DON'T change these to inb_p/outb_p or reset will fail on clones. */
+		outportb(inportb(e8390_base + NE_RESET), e8390_base + NE_RESET);
+
+		while ((inportb(e8390_base + EN0_ISR) & ENISR_RESET) == 0)
+		{
+				RTL8019_TRACE("reseting rtl8019 ...\n");
+				delay_ms(500);
+		}
+
+		outportb(0xff, e8390_base + EN0_ISR);		/* Ack all intr. */
+	outportb(0x49, e8390_base + EN0_DCFG);
+	
 	/* Follow National Semi's recommendations for initing the DP83902. */
 	outportb(E8390_NODMA+E8390_PAGE0+E8390_STOP, e8390_base+E8390_CMD); /* 0x21 */
 	outportb(0x49, e8390_base + EN0_DCFG);	/* 0x48 or 0x49 */
@@ -660,6 +714,7 @@ static rt_err_t rt_rtl8019_init(rt_device_t dev)
 	
 	if(rtl8019_device.startp==1)
 	{
+		RTL8019_TRACE("rtl8019 tx startp\n");
 		outportb(0xff,  e8390_base + EN0_ISR);
 		outportb(ENISR_ALL,  e8390_base + EN0_IMR);
 		outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base+E8390_CMD);
@@ -677,6 +732,7 @@ static rt_err_t rt_rtl8019_init(rt_device_t dev)
 		outportb(E8390_NODMA + E8390_PAGE0, e8390_base + E8390_CMD);
 		outportb(E8390_RXCONFIG, e8390_base + EN0_RXCR);
 	}
+	RTL8019_TRACE("rtl8019 init done:\n");
 
 	return RT_EOK;
 }
@@ -739,7 +795,7 @@ void INTEINT1_handler(int irqno)
 void rt_hw_rtl8019_init()
 {
 
-	rt_sem_init(&sem_tx_done, "tx_done", 1, RT_IPC_FLAG_FIFO);
+	rt_sem_init(&sem_tx_done, "tx_ack", 1, RT_IPC_FLAG_FIFO);
 	rt_sem_init(&sem_lock, "eth_lock", 1, RT_IPC_FLAG_FIFO);
 
 	/*

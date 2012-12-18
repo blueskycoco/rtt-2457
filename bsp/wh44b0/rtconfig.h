@@ -107,18 +107,18 @@
 #define RT_LWIP_ETHTHREAD_PRIORITY	144
 #define RT_LWIP_ETHTHREAD_MBOX_SIZE	32
 #define RT_LWIP_ETHTHREAD_STACKSIZE	512
-#define RT_NFS_HOST_EXPORT	"192.168.0.5:/"
+#define RT_NFS_HOST_EXPORT	"192.168.0.100:/"
 
 
 /* Trace LwIP protocol*/
-/* #define RT_LWIP_DEBUG */
+#define RT_LWIP_DEBUG
 #define RT_LWIP_DNS
 
 /* Enable ICMP protocol*/
 #define RT_LWIP_ICMP
 
 /* Enable IGMP protocol*/
-#define RT_LWIP_IGMP
+/*#define RT_LWIP_IGMP*/
 
 /* Enable UDP protocol*/
 #define RT_LWIP_UDP
@@ -127,7 +127,7 @@
 #define RT_LWIP_TCP
 
 /* Enable SNMP protocol*/
-/* #define RT_LWIP_SNMP */
+#define RT_LWIP_SNMP
 
 /* Using DHCP*/
 /* #define RT_LWIP_DHCP */
