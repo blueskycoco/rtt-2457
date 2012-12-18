@@ -78,13 +78,14 @@ static void NS8390_trigger_send(rt_uint32_t length,rt_int32_t start_page)
 /* transmit packet. */
 rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 {	
-	rt_uint32_t send_length = p->tot_len, output_page;
+	rt_uint32_t send_length = p->tot_len, output_page,t;
 	rt_uint8_t *data;
 	struct pbuf* q;
 	RTL8019_TRACE("rtl8019 tx: %d\n", p->tot_len);
 	/* lock RTL8019 device */
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	q=p;
+	t=p->tot_len;
 	if(q->tot_len < ETH_ZLEN)
 	{
 
@@ -101,23 +102,28 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 		data=(rt_uint8_t *)rt_malloc(send_length);
 		rt_memset(data, 0, send_length);	// more efficient than doing just the needed bits 
 	}
+	//s=data;
+	/*rt_uint32_t j=0;
+	rt_uint32_t i=0;
 	while(q != RT_NULL)
 	{
-		rt_uint32_t i;
+		
 		RTL8019_TRACE("rtl8019 tx 3 %d %d\n",q->len,send_length);
 		for(i=0;i<q->len;i++)
 		{
 			RTL8019_TRACE(" %d ",((rt_uint8_t *)q->payload)[i]);
 		}
 		RTL8019_TRACE("\ndata \n");
-		rt_memcpy((rt_uint8_t *)data, (rt_uint8_t *)q->payload, q->len);
-		for(i=0;i<q->len;i++)
+		//rt_memcpy(data, (rt_uint8_t *)q->payload, q->len);
+		j=i+q->len;
+		for(;i<j;i++)
 		{
+			data[i]=((rt_uint8_t *)q->payload)[j-i];
 			RTL8019_TRACE(" %d ",data[i]);
 		}
-		data=data+q->len;
+		//data=data+q->len;
 		q=q->next;
-	}
+	}*/
 	
 	outportb(0x00, e8390_base + EN0_IMR);
 	rtl8019_device.irqlock = 1;
@@ -188,8 +194,56 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 
 	outportb(E8390_RWRITE+E8390_START, e8390_base + E8390_CMD);
 	rt_uint32_t i;
-	for(i=0;i<send_length/2;i++)
-		outportw(((rt_uint16_t *)data)[i],e8390_base+EN0_DATAPORT);
+	#if 0
+	q=p;
+	while(q!=RT_NULL)
+	{
+		for(i=0;i<q->len/2;i++)
+			{
+				outportw(((rt_uint16_t *)q->payload)[i],e8390_base+EN0_DATAPORT);
+			RTL8019_TRACE(" %2x ",((rt_uint16_t *)q->payload)[i]);
+		}
+		if(q->len&1)
+			outportb(((rt_uint8_t *)q->payload)[q->len-1],e8390_base+EN0_DATAPORT);
+		q=q->next;
+	}
+	#endif
+	//for(i=0;i<send_length/2;i++)
+		//{
+			//outportw(((rt_uint16_t *)data)[i],e8390_base+EN0_DATAPORT);
+			//RTL8019_TRACE(" %2x ",((rt_uint16_t *)data)[i]);
+		//}
+		rt_uint16_t pbuf_index = 0;
+		rt_uint8_t word[2], word_index = 0;
+		while (q)
+		{
+			if (pbuf_index < q->len)
+			{
+				word[word_index++] = ((u8_t*)q->payload)[pbuf_index++];
+				if (word_index == 2)
+				{
+					outportw((word[1] << 8) | word[0],e8390_base+EN0_DATAPORT);
+					//outportw(((rt_uint16_t *)data)[i],e8390_base+EN0_DATAPORT);
+					word_index = 0;
+				}
+			}
+			else
+			{
+				q = q->next;
+				pbuf_index = 0;
+			}
+		}
+		/* One byte could still be unsent */
+		if (word_index == 1)
+		{
+			//DM9000_outw(DM9000_DATA_BASE, word[0]);
+			outportw(word[0],e8390_base+EN0_DATAPORT);
+		}
+		if(t<ETH_ZLEN)
+		{
+			for(i=0;i<(ETH_ZLEN-t)/2;i++)
+			outportw(0x0000,e8390_base+EN0_DATAPORT);
+		}
 	//rt_memcpy((volatile rt_uint16_t *)(e8390_base+EN0_DATAPORT),(rt_uint16_t *)data,send_length>>1);
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
@@ -237,24 +291,24 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 {
 	
-	struct pbuf *p = RT_NULL;
+	//struct pbuf *p = RT_NULL;
 	//wait for uplayer to read back
 	rt_sem_release(&sem_lock);
 	if(g_pbuf!=RT_NULL)
 		{
-			rt_uint32_t i;
-			p=pbuf_alloc(PBUF_LINK, g_pbuf->tot_len, PBUF_RAM);
-			rt_memcpy(p,g_pbuf,g_pbuf->tot_len);
-			while(g_pbuf!=RT_NULL)
+			//rt_uint32_t i;
+		//	p=pbuf_alloc(PBUF_LINK, g_pbuf->tot_len, PBUF_RAM);
+			//rt_memcpy(p,g_pbuf,g_pbuf->tot_len);
+			/*while(g_pbuf!=RT_NULL)
 			{
 				for(i=0;i<g_pbuf->len;i++)
 					RTL8019_TRACE("%d ",((rt_uint8_t *)g_pbuf->payload)[i]);
 				RTL8019_TRACE("\n");
 				g_pbuf=g_pbuf->next;
-			}
+			}*/
 			
 			//pbuf_free(g_pbuf);
-			return p;
+			return g_pbuf;
 		}
 	else
 		return RT_NULL;
