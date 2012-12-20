@@ -21,7 +21,7 @@
 #define outportw(r, d) 	(*(volatile rt_uint16_t *)(d) = (r))
 #define inportb(r) 		(*(volatile rt_uint8_t *)(r))
 #define outportb(r, d) 	(*(volatile rt_uint8_t *)(d) = (r))
-#define FIFO_WORDS        2048
+#define FIFO_WORDS        4096
 
 #define MAX_ADDR_LEN 6
 static rt_uint8_t SrcMacID[MAX_ADDR_LEN] = {0x00,0x80,0x48,0x12,0x34,0x56};
@@ -93,7 +93,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	struct pbuf *q;
 	rt_uint16_t pbuf_index = 0;
 	rt_uint8_t word[2], word_index = 0;
-	//RTL8019_TRACE("<rtl8019 tx>==>: %d\n", p->tot_len);
+	RTL8019_TRACE("<rtl8019 tx>==>: %d\n", p->tot_len);
 	/* lock RTL8019 device */
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	len=p->tot_len;
@@ -209,7 +209,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 				RTL8019_TRACE("increase 1\n");
 				len=len+1;
 			}*/
-		for(i=0;i<(ETH_ZLEN-len)/2;i++)
+		for(i=0;i<(ETH_ZLEN-len+1)/2;i++)
 			outportw(0x0000,e8390_base+EN0_DATAPORT);
 	}
 	//waiting for write over
@@ -255,11 +255,10 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 /* reception packet. */
 struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 {
-	rt_uint16_t tmp_head=0;
-	rt_sem_take(&head_lock, RT_WAITING_FOREVER);
-	tmp_head=head;
-	rt_sem_release(&head_lock);
-	if (tmp_head != tail)
+	//rt_sem_take(&head_lock, RT_WAITING_FOREVER);
+//	tmp_head=head;
+	RTL8019_TRACE("head %d,tail %d\n",head,tail);
+	if (head > tail)
 	{		
 		/* Got packet in FIFO */
 		struct pbuf* p;
@@ -287,13 +286,20 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 				}
 			}
 		}
+		#if 0
 		else
 		{
 				/* Could not allocate buffer for packet, discard it */
 				tail += (len + 1) / 2;
-		}
+		}		
+		#endif
+	//rt_sem_release(&head_lock);
 		return p;
-	}
+	}else{
+	head=0;
+	tail=0;
+}
+	//rt_sem_release(&head_lock);
 	return RT_NULL;	
 }
 
@@ -338,7 +344,7 @@ void ne_block_input(rt_uint32_t count , int ring_offset)
 	outportb(ring_offset & 0xff, e8390_base + EN0_RSARLO);
 	outportb(ring_offset >> 8, e8390_base + EN0_RSARHI);
 	outportb(E8390_RREAD+E8390_START, e8390_base + E8390_CMD);
-	rt_sem_take(&head_lock, RT_WAITING_FOREVER);
+	//rt_sem_take(&head_lock, RT_WAITING_FOREVER);
     /* Write length of packet as first word */
     fifo[head & (FIFO_WORDS - 1)] = count;
     head++;
@@ -374,7 +380,8 @@ void ne_block_input(rt_uint32_t count , int ring_offset)
         fifo[head++ & (FIFO_WORDS - 1)] = inportw(e8390_base+EN0_DATAPORT);
         count -= 2;
     }
-	rt_sem_release(&head_lock);
+	eth_device_ready(&(rtl8019_device.parent));		
+	//rt_sem_release(&head_lock);
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
 	return ;
@@ -631,9 +638,10 @@ void rt_rtl8019_isr(int irqno)
 		else if (interrupts & (ENISR_RX+ENISR_RX_ERR))
 		{
 			/* Got a good (?) packet. */
-		    ei_receive();
+		  
+		  ei_receive();
 			//ask lwip to receive data
-			eth_device_ready(&(rtl8019_device.parent));			
+			//eth_device_ready(&(rtl8019_device.parent));		
 			//rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 		}
 		/* Push the next to-transmit packet through. */
