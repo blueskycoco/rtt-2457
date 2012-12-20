@@ -15,7 +15,7 @@
 
 /* Tick per Second*/
 #define RT_TICK_PER_SECOND	1000
-
+#define RT_USING_ZMODEM
 /* SECTION: RT_DEBUG */
 /* Thread Debug*/
 /* #define RT_THREAD_DEBUG */
@@ -108,7 +108,7 @@
 #define RT_LWIP_ETHTHREAD_MBOX_SIZE	32
 #define RT_LWIP_ETHTHREAD_STACKSIZE	512
 #define RT_NFS_HOST_EXPORT	"192.168.0.100:/"
-
+#define RT_USING_NETUTILS
 
 /* Trace LwIP protocol*/
 #define RT_LWIP_DEBUG
