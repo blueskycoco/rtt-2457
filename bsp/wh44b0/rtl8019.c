@@ -11,7 +11,7 @@
  * nLAN_CS connects to nGCS3
  */
 
-#define RTL8019_DEBUG		1 
+#define RTL8019_DEBUG		0 
 #if RTL8019_DEBUG
 #define RTL8019_TRACE	rt_kprintf
 #else
@@ -93,7 +93,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	struct pbuf *q;
 	rt_uint16_t pbuf_index = 0;
 	rt_uint8_t word[2], word_index = 0;
-	RTL8019_TRACE("<rtl8019 tx>==>: %d\n", p->tot_len);
+	//RTL8019_TRACE("<rtl8019 tx>==>: %d\n", p->tot_len);
 	/* lock RTL8019 device */
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	len=p->tot_len;
@@ -198,13 +198,18 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	/* One byte could still be unsent */
 	if (word_index == 1)
 	{
+		
 		outportw(word[0],e8390_base+EN0_DATAPORT);
 	}
+	//RTL8019_TRACE("word_index %d,len %d\n",word_index,len);
 	if(len< ETH_ZLEN)
 	{
-		if(word_index !=1)
-			len=len+1;
-		for(i=0;i<(ETH_ZLEN-len-1)/2;i++)
+		/*if(word_index !=1)
+			{
+				RTL8019_TRACE("increase 1\n");
+				len=len+1;
+			}*/
+		for(i=0;i<(ETH_ZLEN-len)/2;i++)
 			outportw(0x0000,e8390_base+EN0_DATAPORT);
 	}
 	//waiting for write over
@@ -213,7 +218,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 		//RTL8019_TRACE("Waiting for ENISR_RDC int\n");
 		delay_ms(20);
 	}
-
+//RTL8019_TRACE("111\n");
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
 
@@ -840,8 +845,8 @@ void rt_hw_rtl8019_init()
 	rtl8019_device.parent.eth_rx	 = rt_rtl8019_rx;
 	rtl8019_device.parent.eth_tx	 = rt_rtl8019_tx;
 
-	eth_device_init(&(rtl8019_device.parent), "e0");
 	rtl8019_device.startp=1;
+	eth_device_init(&(rtl8019_device.parent), "e0");
 	/* instal interrupt */
 	rt_hw_interrupt_install(INT_EINT1, INTEINT1_handler, RT_NULL);
 	rt_hw_interrupt_umask(INT_EINT1);
