@@ -21,7 +21,7 @@
 #define outportw(r, d) 	(*(volatile rt_uint16_t *)(d) = (r))
 #define inportb(r) 		(*(volatile rt_uint8_t *)(r))
 #define outportb(r, d) 	(*(volatile rt_uint8_t *)(d) = (r))
-#define FIFO_WORDS        4096
+#define FIFO_WORDS        2048
 
 #define MAX_ADDR_LEN 6
 static rt_uint8_t SrcMacID[MAX_ADDR_LEN] = {0x00,0x80,0x48,0x12,0x34,0x56};
