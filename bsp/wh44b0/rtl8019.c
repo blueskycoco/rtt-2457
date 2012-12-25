@@ -27,7 +27,6 @@
 static rt_uint8_t SrcMacID[MAX_ADDR_LEN] = {0x00,0x80,0x48,0x12,0x34,0x56};
 static rt_uint16_t fifo[FIFO_WORDS];
 static rt_uint16_t head, tail;
-
 struct e8390_pkt_hdr {
   rt_uint8_t status; /* status */
   rt_uint8_t next;   /* pointer to next packet. */
@@ -87,7 +86,7 @@ static void NS8390_trigger_send(rt_uint32_t length,rt_int32_t start_page)
 /* transmit packet. */
 
 rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
-{	
+{		
 	rt_uint32_t send_length, output_page;
 	rt_uint16_t i=0,len;
 	struct pbuf *q;
@@ -204,16 +203,19 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 
 	if(len< ETH_ZLEN)
 	{
-		for(i=0;i<(ETH_ZLEN-len+1)/2;i++)
+		for(i=0;i<(ETH_ZLEN-len)/2;i++)
 			outportw(0x0000,e8390_base+EN0_DATAPORT);
 	}
+	
 	//waiting for write over
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
-		delay_ms(20);
+		//rt_kprintf("wait for tx\n");
+		delay_ms(1);
 	}
 
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
+	
 	rtl8019_device.dmaing &= ~0x01;
 
 	if (!rtl8019_device.txing)
@@ -239,10 +241,10 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
+	
 	//wait for tx int occur
 	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
-	RTL8019_TRACE("<rt_rtl8019_tx><== tx done\n");
-
+	
 	return RT_EOK;
 }
 
@@ -251,7 +253,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 {
 
 	RTL8019_TRACE("head %d,tail %d\n",head,tail);
-	if (head > tail)
+	if (head!=0 && head!=tail)
 	{		
 		/* Got packet in FIFO */
 		struct pbuf* p;
@@ -367,7 +369,8 @@ void ne_block_input(rt_uint32_t count , int ring_offset)
         fifo[head++ & (FIFO_WORDS - 1)] = inportw(e8390_base+EN0_DATAPORT);
         count -= 2;
     }
-	eth_device_ready(&(rtl8019_device.parent));		
+  if(tail==0)
+		eth_device_ready(&(rtl8019_device.parent));		
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 	rtl8019_device.dmaing &= ~0x01;
 	return ;
@@ -613,12 +616,17 @@ void rt_rtl8019_isr(int irqno)
 	/* Change to page 0 and read the intr status reg. */
 	outportb(E8390_NODMA+E8390_PAGE0, e8390_base + E8390_CMD);
 	RTL8019_TRACE("<rt_rtl8019_isr> interrupt(isr=%#2.2x).\n", inportb(e8390_base + EN0_ISR));
-
+	//rt_kprintf("(isr=%#2.2x).\n", inportb(e8390_base + EN0_ISR));
 	/* !!Assumption!! -- we stay in page 0.	 Don't break this. */
 	while ((interrupts = inportb(e8390_base + EN0_ISR)) != 0 &&
 	       ++nr_serviced < MAX_SERVICE)
 	{
-		
+		/* Push the next to-transmit packet through. */
+		if (interrupts & ENISR_TX)
+			ei_tx_intr();
+		else if (interrupts & ENISR_TX_ERR)
+			ei_tx_err();
+			
 		if (interrupts & ENISR_OVER)
 			ei_rx_overrun();
 		else if (interrupts & (ENISR_RX+ENISR_RX_ERR))
@@ -626,11 +634,7 @@ void rt_rtl8019_isr(int irqno)
 			/* Got a good (?) packet. */
 			ei_receive();			
 		}
-		/* Push the next to-transmit packet through. */
-		if (interrupts & ENISR_TX)
-			ei_tx_intr();
-		else if (interrupts & ENISR_TX_ERR)
-			ei_tx_err();
+		
 
 		if (interrupts & ENISR_COUNTERS)
 		{
@@ -641,6 +645,7 @@ void rt_rtl8019_isr(int irqno)
 		if (interrupts & ENISR_RDC)
 		{
 			outportb(ENISR_RDC, e8390_base + EN0_ISR);
+			
 		}
 
 		outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base + E8390_CMD);
