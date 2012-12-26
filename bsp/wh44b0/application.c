@@ -34,10 +34,10 @@ void rt_led_thread_entry(void *parameter)
 	
 			/* re-init device driver */
 			rt_device_init_all();
-			rt_kprintf("TCP/IP initialized 1!\n");
 			/* init lwip system */
 			lwip_sys_init();
 			rt_kprintf("TCP/IP initialized!\n");
+			netio_init();
 		}
 #endif
 #if defined(RT_USING_DFS) && defined(RT_USING_LWIP) && defined(RT_USING_DFS_NFS)
