@@ -150,6 +150,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	/* Write data into dm9000a, two bytes at a time
 	 * Handling pbuf's with odd number of bytes correctly
 	 * No attempt to optimize for speed has been made */
+	 
 	while (q)
 	{
 		if (pbuf_index < q->len)
@@ -167,7 +168,6 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 			pbuf_index = 0;
 		}
 	}
-	/* One byte could still be unsent */
 	if (word_index == 1)
 	{
 		
@@ -188,7 +188,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	}
 
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
-
+	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	if (!rtl8019_device.txing)
 	{
 		rtl8019_device.txing = 1;
@@ -208,7 +208,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	
 
 	/* Turn 8390 interrupts back on. */
-	outportb(ENISR_ALL, e8390_base + EN0_IMR);
+	//outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
 	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
@@ -326,11 +326,18 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 						i--;
 					}
 				}
-			}
-			if(p==RT_NULL)
+				if(p==RT_NULL)
 				p=q;
 			else
-				pbuf_cat(p,q);				
+				pbuf_cat(p,q);		
+			}else{
+					while (pkt_len/2 > 0)
+					{
+						inportw(e8390_base+EN0_DATAPORT);
+						pkt_len--;
+					}
+			}
+					
 			outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
 		}
 		else
@@ -440,7 +447,11 @@ static void ei_tx_intr()
 			rtl8019_device.tx2 = -1,
 			rtl8019_device.lasttx = 2;
 		}
-		else rtl8019_device.lasttx = 20, rtl8019_device.txing = 0;
+		else 
+		{
+			rtl8019_device.lasttx = 20;
+			 rtl8019_device.txing = 0;
+		}
 	}
 	else if (rtl8019_device.tx2 < 0)
 	{
@@ -455,7 +466,10 @@ static void ei_tx_intr()
 			rtl8019_device.lasttx = 1;
 		}
 		else
-			rtl8019_device.lasttx = 10, rtl8019_device.txing = 0;
+		{
+			rtl8019_device.lasttx = 10;
+			 rtl8019_device.txing = 0;
+			}
 	}
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
