@@ -85,7 +85,8 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	struct pbuf *q;
 	rt_uint16_t pbuf_index = 0;
 	rt_uint8_t word[2], word_index = 0;
-	RTL8019_TRACE("tx %d \n",p->tot_len);
+	//RTL8019_TRACE("tx %d \n",p->tot_len);
+	
 	/* lock RTL8019 device */
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	len=p->tot_len;
@@ -175,7 +176,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 
 	if(len< ETH_ZLEN)
 	{
-		for(i=0;i<(ETH_ZLEN-len)/2;i++)
+		for(i=0;i<(ETH_ZLEN-len+1)/2;i++)
 			outportw(0x0000,e8390_base+EN0_DATAPORT);
 	}
 	
@@ -210,10 +211,9 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
+	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
+	//	delay_ms(10);
 	
-	//wait for tx int occur
-	if(rtl8019_device.tx1 != 0 && rtl8019_device.tx2 != 0)
-		rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
 	return RT_EOK;
 }
 static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
@@ -267,7 +267,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 
 		if (this_frame == rxing_page)	/* Read all the frames? */
 		{
-			RTL8019_TRACE("Received %d packets,len %d\n",rx_pkt_count,p->tot_len);
+			//RTL8019_TRACE("Received %d packets,len %d\n",rx_pkt_count,p->tot_len);
 			break;				/* Done for now */
 		}
 
@@ -421,7 +421,7 @@ static void ei_tx_intr()
 	//unsigned long e8390_base = dev->base_addr;
 	//struct ei_device *ei_local = (struct ei_device *) netdev_priv(dev);
 	outportb(ENISR_TX, e8390_base + EN0_ISR); /* Ack intr. */
-
+	
 	/*
 	 * There are two Tx buffers, see which one finished, and trigger
 	 * the send of another one if it exists.
@@ -460,9 +460,8 @@ static void ei_tx_intr()
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
 
-
-	rt_sem_release(&sem_tx_done);
-
+		rt_sem_release(&sem_tx_done);
+	//
 }
 
 static void ei_tx_err()
@@ -500,7 +499,7 @@ void rt_rtl8019_isr(int irqno)
 
 	/* Change to page 0 and read the intr status reg. */
 	outportb(E8390_NODMA+E8390_PAGE0, e8390_base + E8390_CMD);
-	RTL8019_TRACE("isr=%#2.2x\n", inportb(e8390_base + EN0_ISR));
+	//RTL8019_TRACE("isr=%#2.2x\n", inportb(e8390_base + EN0_ISR));
 	/* !!Assumption!! -- we stay in page 0.	 Don't break this. */
 	while ((interrupts = inportb(e8390_base + EN0_ISR)) != 0 &&
 	       ++nr_serviced < MAX_SERVICE)
@@ -518,7 +517,7 @@ void rt_rtl8019_isr(int irqno)
 			/* Got a good (?) packet. */
 			//ei_receive();
 			outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);
-			eth_device_ready(&(rtl8019_device.parent));	
+				eth_device_ready(&(rtl8019_device.parent));	
 		}
 		
 
@@ -611,7 +610,6 @@ static rt_err_t rt_rtl8019_init(rt_device_t dev)
 
 	rtl8019_device.tx1 = rtl8019_device.tx2 = 0;
 	rtl8019_device.txing = 0;
-	
 	if(rtl8019_device.startp==1)
 	{
 		outportb(0xff,  e8390_base + EN0_ISR);
