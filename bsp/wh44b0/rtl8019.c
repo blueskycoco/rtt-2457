@@ -269,6 +269,8 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 		{
 			//RTL8019_TRACE("Received %d packets,len %d\n",rx_pkt_count,p->tot_len);
 			break;				/* Done for now */
+			//rt_sem_release(&sem_lock);
+			//return p;
 		}
 
 		current_offset = this_frame << 8;
@@ -289,6 +291,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 			rtl8019_device.current_page = rxing_page;
 			outportb(rtl8019_device.current_page-1, e8390_base+EN0_BOUNDARY);
 			continue;
+			
 		}
 
 		if (pkt_len < 60  ||  pkt_len > 1518)
@@ -531,9 +534,9 @@ void rt_rtl8019_isr(int irqno)
 		else if (interrupts & (ENISR_RX+ENISR_RX_ERR))
 		{
 			/* Got a good (?) packet. */
-			//ei_receive();
-			outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);
+			outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);			
 				eth_device_ready(&(rtl8019_device.parent));	
+			
 		}
 		
 

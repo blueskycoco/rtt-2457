@@ -320,7 +320,7 @@ static void eth_rx_thread_entry(void* parameter)
 			}
 
 			/* receive all of buffer */
-			while (1)
+			//while (1)
 			{
 				p = device->eth_rx(&(device->parent));
 				if (p != RT_NULL)
@@ -339,7 +339,7 @@ static void eth_rx_thread_entry(void* parameter)
        					p = NULL;
 					}
 				}
-				else break;
+				//else break;
 			}
 		}
 		else
