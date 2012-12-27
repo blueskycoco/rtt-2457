@@ -107,7 +107,7 @@
 #define RT_LWIP_ETHTHREAD_PRIORITY	14
 #define RT_LWIP_ETHTHREAD_MBOX_SIZE	32
 #define RT_LWIP_ETHTHREAD_STACKSIZE	512
-#define RT_NFS_HOST_EXPORT	"192.168.0.100:/"
+#define RT_NFS_HOST_EXPORT	"192.168.1.102:/tftpboot"
 #define RT_USING_NETUTILS
 
 /* Trace LwIP protocol*/
@@ -130,7 +130,7 @@
 #define RT_LWIP_SNMP
 
 /* Using DHCP*/
-/* #define RT_LWIP_DHCP */
+#define RT_LWIP_DHCP
 
 /* ip address of target*/
 #define RT_LWIP_IPADDR0	192

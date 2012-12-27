@@ -40,28 +40,7 @@ void rt_led_thread_entry(void *parameter)
 			netio_init();
 		}
 #endif
-#if defined(RT_USING_DFS) && defined(RT_USING_LWIP) && defined(RT_USING_DFS_NFS)
-			/* NFSv3 Initialization */
-			nfs_init();
-	
-			if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, RT_NFS_HOST_EXPORT) == 0)
-				rt_kprintf("NFSv3 File System initialized!\n");
-			else
-			{
-				if(mkdir("/nfs",0777)==RT_EOK)
-				{
-					if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, RT_NFS_HOST_EXPORT) == 0)
-					{
-						rt_kprintf("nfs mount on /nfs ok\n");
-					}
-					else
-						rt_kprintf("nfs mount on /nfs failed!\n");
-				}
-				else
-					rt_kprintf("nfs mount on /nfs failed!\n");
-			}
-
-#endif
+	nfs_init();
 	while (1)
 	{
 		/* light on leds for one second */
@@ -86,5 +65,33 @@ int rt_application_init()
 		rt_thread_startup(led_thread);
 	return 0;	/* empty */
 }
+#include "finsh.h"
+void nfs(const char *folder)
+{
+	#if defined(RT_USING_DFS) && defined(RT_USING_LWIP) && defined(RT_USING_DFS_NFS)
+			/* NFSv3 Initialization */
+			rt_uint8_t path[256];
+			strcpy(path,"192.168.1.102:/");
+			strcat(path,folder);
+			rt_kprintf("to mount %s\n",path);
+			if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, path) == 0)
+				rt_kprintf("NFSv3 File System initialized!\n");
+			else
+			{
+				if(mkdir("/nfs",0777)==RT_EOK)
+				{
+					if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, path) == 0)
+					{
+						rt_kprintf("nfs mount on /nfs ok\n");
+					}
+					else
+						rt_kprintf("nfs mount on %s failed!\n",path);
+				}
+				else
+					rt_kprintf("nfs mount on %s failed!\n",path);
+			}
 
+#endif
+}
+FINSH_FUNCTION_EXPORT(nfs, mount nfs);
 /** @} */
