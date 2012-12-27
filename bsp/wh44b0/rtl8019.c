@@ -183,12 +183,10 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	//waiting for write over
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
-		//rt_kprintf("wait for tx\n");
 		delay_ms(1);
 	}
 
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
-	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	if (!rtl8019_device.txing)
 	{
 		rtl8019_device.txing = 1;
@@ -208,11 +206,10 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	
 
 	/* Turn 8390 interrupts back on. */
-	//outportb(ENISR_ALL, e8390_base + EN0_IMR);
+	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
 	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
-	//	delay_ms(10);
 	
 	return RT_EOK;
 }
@@ -241,6 +238,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 	struct pbuf *p=RT_NULL;
 	struct e8390_pkt_hdr rx_frame;	
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
+	outportb(0x00, e8390_base + EN0_IMR);
 	int num_rx_pages = rtl8019_device.stop_page-rtl8019_device.rx_start_page;
 	while (++rx_pkt_count < 10)
 	{
@@ -269,8 +267,6 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 		{
 			//RTL8019_TRACE("Received %d packets,len %d\n",rx_pkt_count,p->tot_len);
 			break;				/* Done for now */
-			//rt_sem_release(&sem_lock);
-			//return p;
 		}
 
 		current_offset = this_frame << 8;
@@ -330,15 +326,17 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 					}
 				}
 				if(p==RT_NULL)
-				p=q;
+					p=q;
+				else
+					pbuf_cat(p,q);		
+			}
 			else
-				pbuf_cat(p,q);		
-			}else{
-					while (pkt_len/2 > 0)
-					{
-						inportw(e8390_base+EN0_DATAPORT);
-						pkt_len--;
-					}
+			{
+				while (pkt_len/2 > 0)
+				{
+					inportw(e8390_base+EN0_DATAPORT);
+					pkt_len--;
+				}
 			}
 					
 			outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
@@ -358,9 +356,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 		outportb(next_frame-1, e8390_base+EN0_BOUNDARY);
 	}
 
-	/* We used to also ack ENISR_OVER here, but that would sometimes mask
-	   a real overrun, leaving the 8390 in a stopped state with rec'vr off. */
-	//outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);
+	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	rt_sem_release(&sem_lock);
 	return p;
 }
@@ -415,7 +411,6 @@ static void ei_rx_overrun()
 	 * Clear the Rx ring of all the debris, and ack the interrupt.
 	 */
 	eth_device_ready(&(rtl8019_device.parent));	
-	//rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	
 	outportb(ENISR_OVER, e8390_base+EN0_ISR);
 
@@ -428,10 +423,7 @@ static void ei_rx_overrun()
 }
 static void ei_tx_intr()
 {
-	//unsigned long e8390_base = dev->base_addr;
-	//struct ei_device *ei_local = (struct ei_device *) netdev_priv(dev);
 	outportb(ENISR_TX, e8390_base + EN0_ISR); /* Ack intr. */
-	
 	/*
 	 * There are two Tx buffers, see which one finished, and trigger
 	 * the send of another one if it exists.
@@ -453,8 +445,8 @@ static void ei_tx_intr()
 		else 
 		{
 			rtl8019_device.lasttx = 20;
-			 rtl8019_device.txing = 0;
-			 rt_sem_release(&sem_tx_done);
+			rtl8019_device.txing = 0;
+			rt_sem_release(&sem_tx_done);
 		}
 	}
 	else if (rtl8019_device.tx2 < 0)
@@ -472,15 +464,12 @@ static void ei_tx_intr()
 		else
 		{
 			rtl8019_device.lasttx = 10;
-			 rtl8019_device.txing = 0;
-			 rt_sem_release(&sem_tx_done);
-			}
+			rtl8019_device.txing = 0;
+			rt_sem_release(&sem_tx_done);
+		}
 	}
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
-
-		
-	//
 }
 
 static void ei_tx_err()
@@ -535,7 +524,7 @@ void rt_rtl8019_isr(int irqno)
 		{
 			/* Got a good (?) packet. */
 			outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);			
-				eth_device_ready(&(rtl8019_device.parent));	
+			eth_device_ready(&(rtl8019_device.parent));	
 			
 		}
 		
@@ -697,7 +686,7 @@ void INTEINT1_handler(int irqno)
 
     eint_pend = INTPND;
 
-    /* EINT7 : RTL8019AEP */
+    /* EINT1 : RTL8019AEP */
     if( eint_pend & (1<<INT_EINT1) )
     {
         rt_rtl8019_isr(0);
@@ -712,10 +701,6 @@ void rt_hw_rtl8019_init()
 
 	rt_sem_init(&sem_tx_done, "tx_ack", 1, RT_IPC_FLAG_FIFO);
 	rt_sem_init(&sem_lock, "eth_lock", 1, RT_IPC_FLAG_FIFO);
-	/*
-	 * SRAM Tx/Rx pointer automatically return to start address,
-	 * Packet Transmitted, Packet Received
-	 */
 
 	rtl8019_device.dev_addr[0] = SrcMacID[0];
 	rtl8019_device.dev_addr[1] = SrcMacID[1];

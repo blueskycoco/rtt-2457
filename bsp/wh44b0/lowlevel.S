@@ -25,12 +25,12 @@
 .equ    B2_PMC,       0x0 /* normal(1data) */
 
 /* Bank 3 parameter */
-.equ    B3_Tacs,      0x3 /* 4clk */
-.equ    B3_Tcos,      0x3 /* 4clk */
-.equ    B3_Tacc,      0x7 /* 14clk */
-.equ    B3_Tcoh,      0x3 /* 4clk */
-.equ    B3_Tah,       0x3 /* 4clk */
-.equ    B3_Tacp,      0x3 /* 6clk */
+.equ    B3_Tacs,      0x0 /* 4clk */
+.equ    B3_Tcos,      0x1 /* 4clk */
+.equ    B3_Tacc,      0x2 /* 14clk */
+.equ    B3_Tcoh,      0x1 /* 4clk */
+.equ    B3_Tah,       0x0 /* 4clk */
+.equ    B3_Tacp,      0x0 /* 6clk */
 .equ    B3_PMC,       0x0 /* normal(1data) */
 
 /* Bank 4 parameter */
