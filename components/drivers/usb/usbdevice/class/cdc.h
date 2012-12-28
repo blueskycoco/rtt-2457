@@ -9,8 +9,12 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * 2012-10-03     Yi Qiu      first version
+ * 2012-10-03     Yi Qiu       first version
+ * 2012-12-12     heyuanjie87  add CDC endpoints collection
  */
+ 
+#ifndef  __CDC_H__
+#define  __CDC_H__
 
 #define USB_CDC_PRODUCT_ID              0x5740   /* Product ID */
 #define USB_CDC_BUFSIZE                 0x40
@@ -127,6 +131,9 @@ typedef struct ucdc_union_descriptor* ucdc_union_desc_t;
 
 struct ucdc_comm_descriptor
 {
+#ifdef RT_USB_DEVICE_COMPOSITE
+    struct uiad_descriptor iad_desc;
+#endif
     struct uinterface_descriptor intf_desc;
     struct ucdc_header_descriptor hdr_desc;
     struct ucdc_call_mgmt_descriptor call_mgmt_desc;    
@@ -153,5 +160,14 @@ struct ucdc_line_coding
 };
 typedef struct ucdc_line_coding* ucdc_line_coding_t;
 
+struct cdc_eps
+{
+    uep_t ep_out;
+    uep_t ep_in;
+    uep_t ep_cmd;
+};
+typedef struct cdc_eps* cdc_eps_t;
+ 
 #pragma pack()
 
+#endif

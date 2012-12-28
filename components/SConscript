@@ -14,8 +14,4 @@ for item in list:
     if os.path.isfile(os.path.join(cwd, item, 'SConscript')):
         objs = objs + SConscript(os.path.join(item, 'SConscript'))
 
-# For zmodem
-if GetDepend(['RT_USING_ZMODEM']):
-	objs += Glob('./utilities/zmodem/*.c')
-
 Return('objs')

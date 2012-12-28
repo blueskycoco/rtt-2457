@@ -76,7 +76,7 @@ if GetDepend('RT_USING_RTGUI'):
 				variant_dir='build/examples/gui', duplicate=0)
 
 # build program 
-env.Program(TARGET, objs)
+program = env.Program(TARGET, objs)
 
-# end building 
-EndBuilding(TARGET)
+# end building
+EndBuilding(TARGET, program)

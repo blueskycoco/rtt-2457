@@ -20,83 +20,73 @@
 /**
  * @addtogroup win32
  */
-#define HEAP_SIZE   (1024*1024*10)
-static rt_uint8_t * heap;
 
-void vs_heap_init(void)
-{
-	heap = malloc(HEAP_SIZE);
-	if (heap == RT_NULL)
-		rt_kprintf("there is no memory in pc.");
-}
 /*@{*/
 
 extern int  rt_application_init(void);
 #ifdef RT_USING_FINSH
 extern void finsh_system_init(void);
-extern void finsh_set_device(const char* device);
+extern void finsh_set_device(const char *device);
 #endif
 
+extern rt_uint8_t *heap;
 /**
  * This function will startup RT-Thread RTOS.
  */
 void rtthread_startup(void)
 {
-	/* init board */
-	rt_hw_board_init();
+    /* init board */
+    rt_hw_board_init();
 
-	/* show version */
-	rt_show_version();
+    /* show version */
+    rt_show_version();
 
-	/* init tick */
-	rt_system_tick_init();
+    /* init tick */
+    rt_system_tick_init();
 
-	/* init kernel object */
-	rt_system_object_init();
+    /* init kernel object */
+    rt_system_object_init();
 
-	/* init timer system */
-	rt_system_timer_init();
+    /* init timer system */
+    rt_system_timer_init();
 
 #ifdef RT_USING_HEAP
-	/* init memory system */
-#if (MSVC)
-	vs_heap_init();
-#endif
-	rt_system_heap_init((void*)heap, (void*)&heap[HEAP_SIZE-1]);
+    /* init memory system */
+    rt_system_heap_init((void *)heap, (void *)&heap[HEAP_SIZE - 1]);
 #endif
 
-	/* init scheduler system */
-	rt_system_scheduler_init();
+    /* init scheduler system */
+    rt_system_scheduler_init();
 
-	/* init all device */
+    /* init all device */
 #ifdef RT_USING_DEVICE
-	rt_device_init_all();
+    rt_device_init_all();
 #endif
-	/* init application */
-	rt_application_init();
+    /* init application */
+    rt_application_init();
 
     /* init timer thread */
     rt_system_timer_thread_init();
 
-	/* init idle thread */
-	rt_thread_idle_init();
+    /* init idle thread */
+    rt_thread_idle_init();
 
-	/* start scheduler */
-	rt_system_scheduler_start();
+    /* start scheduler */
+    rt_system_scheduler_start();
 
-	/* never reach here */
-	return ;
+    /* never reach here */
+    return ;
 }
 
 int main(void)
 {
-	/* disable interrupt first */
-	rt_hw_interrupt_disable();
+    /* disable interrupt first */
+    rt_hw_interrupt_disable();
 
-	/* startup RT-Thread RTOS */
-	rtthread_startup();
+    /* startup RT-Thread RTOS */
+    rtthread_startup();
 
-	return 0;
+    return 0;
 }
 
 /*@}*/
