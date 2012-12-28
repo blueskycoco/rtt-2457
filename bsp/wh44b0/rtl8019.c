@@ -46,13 +46,12 @@ struct rt_rtl8019_eth
 };
 static struct rt_rtl8019_eth rtl8019_device;
 static struct rt_semaphore sem_tx_done, sem_lock;
-
+static rt_bool_t g_need_take=RT_FALSE;
 void rt_rtl8019_isr(int irqno);
 /*for write process*/
 static void NS8390_trigger_send(rt_uint32_t length,rt_int32_t start_page);
 /*for read process*/
 static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page);
-void ei_receive();
 
 static void delay_ms(rt_uint32_t ms)
 {
@@ -134,6 +133,11 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 		return RT_ERROR;
 	}
 
+	if(rtl8019_device.tx1!=0 && rtl8019_device.tx2!=0)
+		g_need_take=RT_TRUE;
+	else
+		g_need_take=RT_FALSE;
+
 	/* We should already be in page 0, but to be safe... */
 	outportb(E8390_PAGE0+E8390_START+E8390_NODMA, e8390_base + E8390_CMD);
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);
@@ -209,15 +213,15 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
-	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
+	if(g_need_take==RT_TRUE)
+		rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
 	
 	return RT_EOK;
 }
 static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
 {
-	/* This *shouldn't* happen. If it does, it's the last thing you'll see */
-	rt_uint32_t i;
 
+	rt_uint32_t i;
 	outportb(E8390_NODMA+E8390_PAGE0+E8390_START, e8390_base+ E8390_CMD);
 	outportb(sizeof(struct e8390_pkt_hdr), e8390_base + EN0_RCNTLO);
 	outportb(0, e8390_base + EN0_RCNTHI);
@@ -227,8 +231,6 @@ static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
 	for(i=0;i<sizeof(struct e8390_pkt_hdr)>>1;i++)
 		((rt_uint16_t *)hdr)[i]=inportw(e8390_base+EN0_DATAPORT);
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
-
-//	RTL8019_TRACE("<ei_get_8390_hdr> hdr->count = %d\n",hdr->count - sizeof(struct e8390_pkt_hdr));
 }
 struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 {
@@ -446,7 +448,6 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 20;
 			rtl8019_device.txing = 0;
-			rt_sem_release(&sem_tx_done);
 		}
 	}
 	else if (rtl8019_device.tx2 < 0)
@@ -465,11 +466,16 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 10;
 			rtl8019_device.txing = 0;
-			rt_sem_release(&sem_tx_done);
 		}
 	}
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
+
+	if(g_need_take==RT_TRUE)
+	{
+		g_need_take=RT_FALSE;
+		rt_sem_release(&sem_tx_done);
+	}
 }
 
 static void ei_tx_err()
@@ -503,6 +509,7 @@ static void ei_tx_err()
 /* interrupt service routine */
 void rt_rtl8019_isr(int irqno)
 {
+#if 0
 	int interrupts, nr_serviced = 0;
 
 	/* Change to page 0 and read the intr status reg. */
@@ -560,6 +567,31 @@ void rt_rtl8019_isr(int irqno)
 			outportb(0xff, e8390_base + EN0_ISR); /* Ack. all intrs. */
 		}
 	}
+#else
+	outportb(E8390_NODMA+E8390_PAGE0, e8390_base + E8390_CMD);
+	rt_uint8_t interrupts = inportb(e8390_base + EN0_ISR);
+
+	if (interrupts & ENISR_TX)
+		ei_tx_intr();
+	
+	if (interrupts & ENISR_TX_ERR)
+		ei_tx_err();
+	
+	if (interrupts & ENISR_OVER)
+		ei_rx_overrun();
+	
+	if (interrupts & (ENISR_RX+ENISR_RX_ERR))
+	{
+		outportb(ENISR_RX+ENISR_RX_ERR, e8390_base+EN0_ISR);			
+		eth_device_ready(&(rtl8019_device.parent));	
+	}
+	
+	if (interrupts & ENISR_COUNTERS)
+		outportb(ENISR_COUNTERS, e8390_base + EN0_ISR);
+	
+	if (interrupts & ENISR_RDC)
+		outportb(ENISR_RDC, e8390_base + EN0_ISR);
+#endif
 }
 
 /* RT-Thread Device Interface */
@@ -571,7 +603,6 @@ static rt_err_t rt_rtl8019_init(rt_device_t dev)
 	rtl8019_device.tx_start_page = 0x40;
 	rtl8019_device.stop_page=0x80;
 	rtl8019_device.rx_start_page = 0x4c;
-
 
 	/* DON'T change these to inb_p/outb_p or reset will fail on clones. */
 	outportb(inportb(e8390_base + NE_RESET), e8390_base + NE_RESET);
