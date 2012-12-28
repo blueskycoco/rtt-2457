@@ -191,7 +191,7 @@ static nfs_fh3 *get_dir_handle(struct nfs_filesystem *nfs, const char *name)
 	char *file;
 	char *path;
 	char *init;
-
+	
 	init = path = rt_malloc(strlen(name)+1);
 	if (init == RT_NULL)
 		return RT_NULL;
@@ -213,8 +213,8 @@ static nfs_fh3 *get_dir_handle(struct nfs_filesystem *nfs, const char *name)
 	{
 		copy_handle(handle, &nfs->current_handle);
 	}
-
-	while ((file = strtok_r(RT_NULL, "/", &path)) != RT_NULL && path[0] != '\0')
+	
+	while ((file = strtok_r(RT_NULL, "/", &path)) != RT_NULL && path != RT_NULL)
 	{
 		LOOKUP3args args;
 		LOOKUP3res res;
@@ -222,7 +222,6 @@ static nfs_fh3 *get_dir_handle(struct nfs_filesystem *nfs, const char *name)
 		copy_handle(&args.what.dir, handle);
 		xdr_free((xdrproc_t)xdr_nfs_fh3, (char *)handle);
 		args.what.name = file;
-
 		if (nfsproc3_lookup_3(args, &res, nfs->nfs_client) != RPC_SUCCESS)
 		{
 			rt_kprintf("Lookup failed\n");
@@ -338,7 +337,6 @@ int nfs_create(struct nfs_filesystem *nfs, const char *name, mode_t mode)
 		args.where.name = (char *)name;
 	}
 	args.how.mode = GUARDED;
-
 	args.how.createhow3_u.obj_attributes.mode.set_it = TRUE;
 	args.how.createhow3_u.obj_attributes.mode.set_mode3_u.mode = mode;
 	args.how.createhow3_u.obj_attributes.uid.set_it = FALSE;

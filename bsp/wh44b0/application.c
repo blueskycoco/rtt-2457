@@ -70,25 +70,25 @@ void nfs(const char *folder)
 {
 	#if defined(RT_USING_DFS) && defined(RT_USING_LWIP) && defined(RT_USING_DFS_NFS)
 			/* NFSv3 Initialization */
-			rt_uint8_t path[256];
-			strcpy(path,"192.168.1.102:/");
-			strcat(path,folder);
-			rt_kprintf("to mount %s\n",path);
-			if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, path) == 0)
+			//rt_uint8_t path[256];
+			//strcpy(path,"192.168.1.102:/");
+			//strcat(path,folder);
+			rt_kprintf("to mount %s\n",folder);
+			if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, folder) == 0)
 				rt_kprintf("NFSv3 File System initialized!\n");
 			else
 			{
 				if(mkdir("/nfs",0777)==RT_EOK)
 				{
-					if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, path) == 0)
+					if (dfs_mount(RT_NULL, "/nfs", "nfs", 0, folder) == 0)
 					{
 						rt_kprintf("nfs mount on /nfs ok\n");
 					}
 					else
-						rt_kprintf("nfs mount on %s failed!\n",path);
+						rt_kprintf("nfs mount on %s failed!\n",folder);
 				}
 				else
-					rt_kprintf("nfs mount on %s failed!\n",path);
+					rt_kprintf("nfs mount on %s failed!\n",folder);
 			}
 
 #endif

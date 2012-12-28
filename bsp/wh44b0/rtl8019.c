@@ -213,7 +213,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
-	if(g_need_take==RT_TRUE)
+	//if(g_need_take==RT_TRUE)
 		rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
 	
 	return RT_EOK;
@@ -448,6 +448,7 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 20;
 			rtl8019_device.txing = 0;
+			rt_sem_release(&sem_tx_done);
 		}
 	}
 	else if (rtl8019_device.tx2 < 0)
@@ -466,16 +467,17 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 10;
 			rtl8019_device.txing = 0;
+			rt_sem_release(&sem_tx_done);
 		}
 	}
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
 
-	if(g_need_take==RT_TRUE)
+	/*if(g_need_take==RT_TRUE)
 	{
 		g_need_take=RT_FALSE;
 		rt_sem_release(&sem_tx_done);
-	}
+	}*/
 }
 
 static void ei_tx_err()
