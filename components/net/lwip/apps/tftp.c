@@ -72,7 +72,7 @@ void tftp_get(const char* host, const char* dir, const char* filename)
 		if (length > 0)
 		{
 			write(fd, (char*)&tftp_buffer[4], length - 4);
-			rt_kprintf("#");
+			//rt_kprintf("#");
 
 			/* make ACK */			
 			tftp_buffer[0] = 0; tftp_buffer[1] = TFTP_ACK; /* opcode */
@@ -185,7 +185,7 @@ void tftp_put(const char* host, const char* dir, const char* filename)
 				tftp_buffer[3] == (block_number & 0xff))
 			{
 				block_number ++;
-				rt_kprintf("#");
+				//rt_kprintf("#");
 			}
 			else 
 			{
