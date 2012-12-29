@@ -14,7 +14,7 @@
 #define RT_THREAD_PRIORITY_MAX	256
 
 /* Tick per Second*/
-#define RT_TICK_PER_SECOND	1000
+#define RT_TICK_PER_SECOND	100
 #define RT_USING_ZMODEM
 /* SECTION: RT_DEBUG */
 /* Thread Debug*/
@@ -100,8 +100,8 @@
 #define RT_USING_LWIP
 #define RT_LWIP_USING_RT_MEM
 #define RT_LWIP_TCP_PCB_NUM	5
-#define RT_LWIP_TCP_SND_BUF	8192//8192
-#define RT_LWIP_TCP_WND	2048//1460//8192
+#define RT_LWIP_TCP_SND_BUF	8192*2
+#define RT_LWIP_TCP_WND	2500//1460//8192
 #define RT_LWIP_TCP_SEG_NUM	40
 #define RT_LWIP_TCPTHREAD_PRIORITY	12
 #define RT_LWIP_TCPTHREAD_MBOX_SIZE	32
@@ -132,7 +132,7 @@
 #define RT_LWIP_SNMP
 
 /* Using DHCP*/
-#define RT_LWIP_DHCP
+/*#define RT_LWIP_DHCP*/
 
 /* ip address of target*/
 #define RT_LWIP_IPADDR0	192

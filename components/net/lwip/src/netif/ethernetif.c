@@ -326,17 +326,11 @@ static void eth_rx_thread_entry(void* parameter)
 			}
 
 			/* receive all of buffer */
-			//while (1)
+			while (1)
 			{
 				p = device->eth_rx(&(device->parent));
 				if (p != RT_NULL)
 				{
-					#if 0
-					rt_kprintf("rx totlen %d, len %d",p->tot_len,p->len);
-					rt_uint32_t i;
-					for(i=0;i<p->len;i++)
-						rt_kprintf("0x%4x",((rt_uint8_t *)p->payload)[i]);
-					#endif
 					/* notify to upper layer */
 					if( device->netif->input(p, device->netif) != ERR_OK )
 					{
@@ -345,7 +339,7 @@ static void eth_rx_thread_entry(void* parameter)
        					p = NULL;
 					}
 				}
-				//else break;
+				else break;
 			}
 		}
 		else
