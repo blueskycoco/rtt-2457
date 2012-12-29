@@ -448,7 +448,7 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 20;
 			rtl8019_device.txing = 0;
-			rt_sem_release(&sem_tx_done);
+			//rt_sem_release(&sem_tx_done);
 		}
 	}
 	else if (rtl8019_device.tx2 < 0)
@@ -467,12 +467,12 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 10;
 			rtl8019_device.txing = 0;
-			rt_sem_release(&sem_tx_done);
+			//rt_sem_release(&sem_tx_done);
 		}
 	}
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
-
+rt_sem_release(&sem_tx_done);
 	/*if(g_need_take==RT_TRUE)
 	{
 		g_need_take=RT_FALSE;
