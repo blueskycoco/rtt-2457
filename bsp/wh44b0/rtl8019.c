@@ -754,4 +754,11 @@ void rt_hw_rtl8019_init()
 	rt_hw_interrupt_umask(INT_EINT1);
 }
 
-
+#include "finsh.h"
+void ne_reset(void)
+{
+		rt_kprintf("reset rtl8019");
+		rtl8019_device.startp=1;
+		rt_rtl8019_init(RT_NULL);
+}
+FINSH_FUNCTION_EXPORT(ne_reset, ne_reset);
