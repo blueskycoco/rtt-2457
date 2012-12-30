@@ -51,7 +51,7 @@ void rt_rtl8019_isr(int irqno);
 static void NS8390_trigger_send(rt_uint32_t length,rt_int32_t start_page);
 /*for read process*/
 static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page);
-
+static rt_err_t rt_rtl8019_init(rt_device_t dev);
 static void delay_ms(rt_uint32_t ms)
 {
 	rt_uint32_t len;
@@ -81,6 +81,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	rt_uint32_t send_length, output_page;
 	rt_uint16_t i=0,len;
 	struct pbuf *q;
+	rt_err_t result;
 	rt_uint16_t pbuf_index = 0;
 	rt_uint8_t word[2], word_index = 0;
 	//RTL8019_TRACE("tx %d \n",p->tot_len);
@@ -208,8 +209,14 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
 	
-	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
-	
+	result=rt_sem_take(&sem_tx_done, 3*RT_TICK_PER_SECOND);
+	if(result!=RT_EOK)
+	{//rtl8019 is dead ,need reset
+		rt_kprintf("tx timeout ,reset rtl8019");
+		rtl8019_device.startp=1;
+		rt_rtl8019_init(RT_NULL);
+		return result;
+	}
 	return RT_EOK;
 }
 static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
