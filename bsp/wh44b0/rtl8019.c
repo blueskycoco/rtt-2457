@@ -11,7 +11,7 @@
  * nLAN_CS connects to nGCS3
  */
 
-#define RTL8019_DEBUG		1 
+#define RTL8019_DEBUG		0
 #if RTL8019_DEBUG
 #define RTL8019_TRACE	rt_kprintf
 #else
@@ -46,7 +46,6 @@ struct rt_rtl8019_eth
 };
 static struct rt_rtl8019_eth rtl8019_device;
 static struct rt_semaphore sem_tx_done, sem_lock;
-static rt_bool_t g_need_take=RT_FALSE;
 void rt_rtl8019_isr(int irqno);
 /*for write process*/
 static void NS8390_trigger_send(rt_uint32_t length,rt_int32_t start_page);
@@ -133,11 +132,6 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 		return RT_ERROR;
 	}
 
-	if(rtl8019_device.tx1!=0 && rtl8019_device.tx2!=0)
-		g_need_take=RT_TRUE;
-	else
-		g_need_take=RT_FALSE;
-
 	/* We should already be in page 0, but to be safe... */
 	outportb(E8390_PAGE0+E8390_START+E8390_NODMA, e8390_base + E8390_CMD);
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);
@@ -213,8 +207,8 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
-	//if(g_need_take==RT_TRUE)
-		rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
+	
+	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
 	
 	return RT_EOK;
 }
@@ -448,7 +442,6 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 20;
 			rtl8019_device.txing = 0;
-			//rt_sem_release(&sem_tx_done);
 		}
 	}
 	else if (rtl8019_device.tx2 < 0)
@@ -467,17 +460,11 @@ static void ei_tx_intr()
 		{
 			rtl8019_device.lasttx = 10;
 			rtl8019_device.txing = 0;
-			//rt_sem_release(&sem_tx_done);
 		}
 	}
 //	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
 //			 rtl8019_device.lasttx);
-rt_sem_release(&sem_tx_done);
-	/*if(g_need_take==RT_TRUE)
-	{
-		g_need_take=RT_FALSE;
-		rt_sem_release(&sem_tx_done);
-	}*/
+	rt_sem_release(&sem_tx_done);
 }
 
 static void ei_tx_err()
