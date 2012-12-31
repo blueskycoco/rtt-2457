@@ -87,7 +87,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	//RTL8019_TRACE("tx %d \n",p->tot_len);
 	rt_uint8_t delay=0;
 	/* lock RTL8019 device */
-	result = rt_sem_take(&sem_lock, 3*RT_TICK_PER_SECOND);
+	result = rt_sem_take(&sem_lock, 10);
 	if(result!=RT_EOK)
 	{//rtl8019 is dead ,need reset
 		rt_kprintf("tx timeout ,reset rtl8019");
@@ -194,7 +194,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 		if(delay>100)
 		{	/* We should never get here. */
 		
-		RTL8019_TRACE("tx timeout reset rtl8019\n");
+		RTL8019_TRACE("tx RDC timeout reset rtl8019\n");
 		outportb(ENISR_ALL, e8390_base + EN0_IMR);
 		/* unlock RTL8019 device */
 		rtl8019_device.startp=1;
@@ -228,10 +228,10 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	/* unlock RTL8019 device */
 	rt_sem_release(&sem_lock);
 	
-	result=rt_sem_take(&sem_tx_done, 3*RT_TICK_PER_SECOND);
+	result=rt_sem_take(&sem_tx_done, 10);
 	if(result!=RT_EOK)
 	{//rtl8019 is dead ,need reset
-		rt_kprintf("tx timeout ,reset rtl8019");
+		rt_kprintf("tx done timeout ,reset rtl8019");
 		rtl8019_device.startp=1;
 		rt_rtl8019_init(RT_NULL);
 		return result;
@@ -260,7 +260,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 	struct pbuf *p=RT_NULL;
 	struct e8390_pkt_hdr rx_frame;	
 	rt_err_t result;
-	result = rt_sem_take(&sem_lock, 3*RT_TICK_PER_SECOND);
+	result = rt_sem_take(&sem_lock, 10);
 	if(result!=RT_EOK)
 	{//rtl8019 is dead ,need reset
 		rt_kprintf("rx timeout ,reset rtl8019");
