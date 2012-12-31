@@ -85,7 +85,7 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	rt_uint16_t pbuf_index = 0;
 	rt_uint8_t word[2], word_index = 0;
 	//RTL8019_TRACE("tx %d \n",p->tot_len);
-	
+	rt_uint8_t delay=0;
 	/* lock RTL8019 device */
 	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	len=p->tot_len;
@@ -183,6 +183,18 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
 		delay_ms(1);
+		delay++;
+		if(delay>100)
+		{	/* We should never get here. */
+		
+		RTL8019_TRACE("tx timeout reset rtl8019\n");
+		outportb(ENISR_ALL, e8390_base + EN0_IMR);
+		/* unlock RTL8019 device */
+		rtl8019_device.startp=1;
+		rt_rtl8019_init(RT_NULL);
+		rt_sem_release(&sem_lock);
+		return RT_ERROR;
+	 }
 	}
 
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
