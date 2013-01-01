@@ -11,7 +11,7 @@
  * nLAN_CS connects to nGCS3
  */
 
-#define RTL8019_DEBUG		0
+#define RTL8019_DEBUG		1
 #if RTL8019_DEBUG
 #define RTL8019_TRACE	rt_kprintf
 #else
@@ -226,9 +226,10 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	/* Turn 8390 interrupts back on. */
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
-	rt_sem_release(&sem_lock);
+	
 	
 	result=rt_sem_take(&sem_tx_done, 10);
+	rt_sem_release(&sem_lock);
 	if(result!=RT_EOK)
 	{//rtl8019 is dead ,need reset
 		rt_kprintf("tx done timeout ,reset rtl8019");
@@ -266,7 +267,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 		rt_kprintf("rx timeout ,reset rtl8019");
 		rtl8019_device.startp=1;
 		rt_rtl8019_init(RT_NULL);
-		return result;
+		return RT_NULL;
 	}
 	outportb(0x00, e8390_base + EN0_IMR);
 	int num_rx_pages = rtl8019_device.stop_page-rtl8019_device.rx_start_page;

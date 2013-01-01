@@ -450,25 +450,25 @@ int ftp_process_request(struct ftp_session* session, char *buf)
 		FD_ZERO(&readfds);
 		if((sockfd=socket(PF_INET, SOCK_STREAM, 0))==-1)
 		{
-			rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+			rt_sprintf(sbuf, "PASV create socket failed\r\n");
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			goto err1;
 		}
 		if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval))==-1)
 		{
-			rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+			rt_sprintf(sbuf, "PASV setsocketopt failed\r\n");
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			goto err1;
 		}
 		if(bind(sockfd, (struct sockaddr *)&local, addr_len)==-1)
 		{
-			rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+			rt_sprintf(sbuf, "PASV bind failed\r\n");
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			goto err1;
 		}
 		if(listen(sockfd, 1)==-1)
 		{
-			rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+			rt_sprintf(sbuf, "PASV listen failed\r\n");
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			goto err1;
 		}
@@ -481,7 +481,7 @@ int ftp_process_request(struct ftp_session* session, char *buf)
 		{
 			if((session->pasv_sockfd = accept(sockfd, (struct sockaddr*)&pasvremote, &addr_len))==-1)
 			{
-				rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+				rt_sprintf(sbuf, "PASV accept failed\r\n");
 				send(session->sockfd, sbuf, strlen(sbuf), 0);
 				goto err1;
 			}
@@ -655,7 +655,7 @@ err1:
 		FD_ZERO(&readfds);
 		if((session->pasv_sockfd=socket(AF_INET, SOCK_STREAM, 0))==-1)
 		{
-			rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+			rt_sprintf(sbuf, "PORT create socket failed\r\n");
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			closesocket(session->pasv_sockfd);
 			session->pasv_active = 0;
@@ -671,7 +671,7 @@ err1:
 			pasvremote.sin_addr=session->remote.sin_addr;
 			if(connect(session->pasv_sockfd, (struct sockaddr *)&pasvremote, addr_len)==-1)
 			{
-				rt_sprintf(sbuf, "425 Can't open data connection.\r\n");
+				rt_sprintf(sbuf, "PORT connect failed\r\n");
 				send(session->sockfd, sbuf, strlen(sbuf), 0);
 				closesocket(session->pasv_sockfd);
 				rt_free(sbuf);				

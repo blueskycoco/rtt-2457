@@ -59,7 +59,7 @@
 #define API_MSG_DEBUG               LWIP_DBG_OFF
 #define TCPIP_DEBUG                 LWIP_DBG_OFF
 #define NETIF_DEBUG                 LWIP_DBG_OFF
-#define SOCKETS_DEBUG               LWIP_DBG_OFF
+#define SOCKETS_DEBUG               LWIP_DBG_ON
 #define DNS_DEBUG                   LWIP_DBG_OFF
 #define AUTOIP_DEBUG                LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
@@ -130,6 +130,7 @@
 #define MEMP_NUM_NETBUF             2
 /* MEMP_NUM_NETCONN: the number of struct netconns. */
 #define MEMP_NUM_NETCONN            4
+#define SO_REUSE 1
 /* MEMP_NUM_TCPIP_MSG_*: the number of struct tcpip_msg, which is used
    for sequential API communication and incoming packets. Used in
    src/api/tcpip.c. */

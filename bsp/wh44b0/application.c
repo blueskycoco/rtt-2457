@@ -40,8 +40,8 @@ void rt_led_thread_entry(void *parameter)
 			netio_init();
 		}
 #endif
-	nfs_init();
-	nfs("192.168.0.100:/test");
+	//nfs_init();
+	//nfs("192.168.0.100:/test");
 	while (1)
 	{
 		/* light on leds for one second */
