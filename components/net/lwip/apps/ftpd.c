@@ -13,7 +13,7 @@
 #define FTP_PASSWORD		"demo"
 #define FTP_WELCOME_MSG		"220-= welcome on RT-Thread FTP server =-\r\n220 \r\n"
 #define FTP_BUFFER_SIZE		1024
-
+struct sockaddr local_ip_addr;
 struct ftp_session
 {
 	rt_bool_t is_anonymous;
@@ -122,7 +122,6 @@ void ftpd_thread_entry(void* parameter)
 	struct ftp_session* session;
 	rt_uint32_t addr_len = sizeof(struct sockaddr);
 	char * buffer = (char *) rt_malloc(FTP_BUFFER_SIZE);
-
 	local.sin_port=htons(FTP_PORT);
 	local.sin_family=PF_INET;
 	local.sin_addr.s_addr=INADDR_ANY;
@@ -136,7 +135,6 @@ void ftpd_thread_entry(void* parameter)
 		rt_kprintf("create socket failed\n");
 		return ;
 	}
-
 	bind(sockfd, (struct sockaddr *)&local, addr_len);
 	listen(sockfd, FTP_MAX_CONNECTION);
 
@@ -171,10 +169,14 @@ void ftpd_thread_entry(void* parameter)
 			}
 			else
 			{
+				getsockname(com_socket,&local_ip_addr,&addr_len);
+				/*rt_uint8_t i=0;
+				for(i=0;i<14;i++)
+				rt_kprintf("%d ",local_ip_addr.sa_data[i]);*/
 				rt_kprintf("Got connection from %s\n", inet_ntoa(remote.sin_addr));
 				send(com_socket, FTP_WELCOME_MSG, strlen(FTP_WELCOME_MSG), 0);
 				FD_SET(com_socket, &readfds);
-
+				
 				/* new session */
 				session = ftp_new_session();
 				if (session != NULL)
@@ -437,8 +439,7 @@ int ftp_process_request(struct ftp_session* session, char *buf)
 	{
 		int dig1, dig2;
 		int sockfd;
-		char optval='1';
-
+		int optval=1;
 		session->pasv_port = 10000;
 		session->pasv_active = 1;
 		local.sin_port=htons(session->pasv_port);
@@ -472,11 +473,12 @@ int ftp_process_request(struct ftp_session* session, char *buf)
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			goto err1;
 		}
-		rt_kprintf("Listening %d seconds @ port %d\n", tv.tv_sec, session->pasv_port);
-		rt_sprintf(sbuf, "227 Entering passive mode (%d,%d,%d,%d,%d,%d)\r\n", 127, 0, 0, 1, dig1, dig2);
+		
+		rt_kprintf("Listening %d seconds @ port %d \n", tv.tv_sec, session->pasv_port);
+		rt_sprintf(sbuf, "227 Entering passive mode (%d,%d,%d,%d,%d,%d)\r\n", local_ip_addr.sa_data[2], local_ip_addr.sa_data[3], local_ip_addr.sa_data[4], local_ip_addr.sa_data[5], dig1, dig2);
 		send(session->sockfd, sbuf, strlen(sbuf), 0);
 		FD_SET(sockfd, &readfds);
-		select(0, &readfds, 0, 0, &tv);
+		select(sockfd+1, &readfds, 0, 0, &tv);
 		if(FD_ISSET(sockfd, &readfds))
 		{
 			if((session->pasv_sockfd = accept(sockfd, (struct sockaddr*)&pasvremote, &addr_len))==-1)
@@ -514,7 +516,8 @@ err1:
 			rt_sprintf(sbuf, "550 \"%s\" : not a regular file\r\n", filename);
 			send(session->sockfd, sbuf, strlen(sbuf), 0);
 			session->offset=0;
-			rt_free(sbuf);			
+			rt_free(sbuf);	
+			closesocket(session->pasv_sockfd);		
 			return 0;
 		}
 
@@ -522,6 +525,7 @@ err1:
 		if (fd < 0)
 		{
 			rt_free(sbuf);
+			closesocket(session->pasv_sockfd);
 			return 0;
 		}
 
