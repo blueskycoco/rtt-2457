@@ -42,6 +42,7 @@ void rt_led_thread_entry(void *parameter)
 #endif
 	//nfs_init();
 	//nfs("192.168.0.100:/test");
+	//ftpd_start();
 	while (1)
 	{
 		/* light on leds for one second */

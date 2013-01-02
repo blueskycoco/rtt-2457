@@ -11,7 +11,7 @@
  * nLAN_CS connects to nGCS3
  */
 
-#define RTL8019_DEBUG		1
+#define RTL8019_DEBUG		0
 #if RTL8019_DEBUG
 #define RTL8019_TRACE	rt_kprintf
 #else
@@ -81,20 +81,12 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	rt_uint32_t send_length, output_page;
 	rt_uint16_t i=0,len;
 	struct pbuf *q;
-	rt_err_t result;
 	rt_uint16_t pbuf_index = 0;
 	rt_uint8_t word[2], word_index = 0;
 	//RTL8019_TRACE("tx %d \n",p->tot_len);
-	rt_uint8_t delay=0;
 	/* lock RTL8019 device */
-	result = rt_sem_take(&sem_lock, 10);
-	if(result!=RT_EOK)
-	{//rtl8019 is dead ,need reset
-		rt_kprintf("tx timeout ,reset rtl8019");
-		rtl8019_device.startp=1;
-		rt_rtl8019_init(RT_NULL);
-		return result;
-	}
+	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
+	
 	len=p->tot_len;
 	if(p->tot_len < ETH_ZLEN)
 	{
@@ -190,18 +182,6 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	while ((inportb(e8390_base + EN0_ISR) & ENISR_RDC) == 0)
 	{
 		delay_ms(1);
-		delay++;
-		if(delay>100)
-		{	/* We should never get here. */
-		
-		RTL8019_TRACE("tx RDC timeout reset rtl8019\n");
-		outportb(ENISR_ALL, e8390_base + EN0_IMR);
-		/* unlock RTL8019 device */
-		rtl8019_device.startp=1;
-		rt_rtl8019_init(RT_NULL);
-		rt_sem_release(&sem_lock);
-		return RT_ERROR;
-	 }
 	}
 
 	outportb(ENISR_RDC, e8390_base + EN0_ISR);	/* Ack intr. */
@@ -227,16 +207,8 @@ rt_err_t rt_rtl8019_tx( rt_device_t dev, struct pbuf* p)
 	outportb(ENISR_ALL, e8390_base + EN0_IMR);
 	/* unlock RTL8019 device */
 	
-	
-	result=rt_sem_take(&sem_tx_done, 10);
 	rt_sem_release(&sem_lock);
-	if(result!=RT_EOK)
-	{//rtl8019 is dead ,need reset
-		rt_kprintf("tx done timeout ,reset rtl8019");
-		rtl8019_device.startp=1;
-		rt_rtl8019_init(RT_NULL);
-		return result;
-	}
+	rt_sem_take(&sem_tx_done, RT_WAITING_FOREVER);
 	return RT_EOK;
 }
 static void ei_get_8390_hdr(struct e8390_pkt_hdr *hdr, int ring_page)
@@ -260,15 +232,7 @@ struct pbuf *rt_rtl8019_rx(rt_device_t dev)
 	rt_uint32_t rx_pkt_count = 0;
 	struct pbuf *p=RT_NULL;
 	struct e8390_pkt_hdr rx_frame;	
-	rt_err_t result;
-	result = rt_sem_take(&sem_lock, 10);
-	if(result!=RT_EOK)
-	{//rtl8019 is dead ,need reset
-		rt_kprintf("rx timeout ,reset rtl8019");
-		rtl8019_device.startp=1;
-		rt_rtl8019_init(RT_NULL);
-		return RT_NULL;
-	}
+	rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 	outportb(0x00, e8390_base + EN0_IMR);
 	int num_rx_pages = rtl8019_device.stop_page-rtl8019_device.rx_start_page;
 	while (++rx_pkt_count < 10)
@@ -497,8 +461,7 @@ static void ei_tx_intr()
 			rtl8019_device.txing = 0;
 		}
 	}
-//	else RTL8019_TRACE(KERN_WARNING "%s: unexpected TX-done interrupt, lasttx=%d.\n",
-//			 rtl8019_device.lasttx);
+//else rt_kprintf("unexpected TX-done interrupt, lasttx=%d.\n",rtl8019_device.lasttx);
 	rt_sem_release(&sem_tx_done);
 }
 
@@ -615,6 +578,9 @@ void rt_rtl8019_isr(int irqno)
 	
 	if (interrupts & ENISR_RDC)
 		outportb(ENISR_RDC, e8390_base + EN0_ISR);
+		
+	if (interrupts & ENISR_RESET)
+		outportb(ENISR_RESET, e8390_base + EN0_ISR);
 #endif
 }
 
