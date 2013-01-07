@@ -579,7 +579,7 @@ void rt_rtl8019_isr(int irqno)
 	if (interrupts & ENISR_RDC)
 		outportb(ENISR_RDC, e8390_base + EN0_ISR);
 		
-	if (interrupts & ENISR_RESET)
+	//if (interrupts & ENISR_RESET)
 		outportb(ENISR_RESET, e8390_base + EN0_ISR);
 #endif
 }
