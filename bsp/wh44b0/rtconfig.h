@@ -12,6 +12,8 @@
 
 /* PRIORITY_MAX*/
 #define RT_THREAD_PRIORITY_MAX	256
+#define RT_USING_USB_HOST
+#define RT_USB_CLASS_ADK
 
 /* Tick per Second*/
 #define RT_TICK_PER_SECOND	100
