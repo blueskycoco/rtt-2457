@@ -225,6 +225,29 @@ static  void rt_hw_timer_init()
 	TCON 	|=(0x00000001);
 
 }
+void INTEINT4567_handler(int irqno)
+{
+    rt_uint32_t eint_pend;
+	rt_uint32_t extint_pend;
+    eint_pend = INTPND;
+	extint_pend = EXTINTPND;
+    /* EINT4 : SL811HS */
+    if( eint_pend & (1<<INT_EINT4567) )
+    {
+    	if(extint_pend & (1<<0))
+        	INTEINT4_handler(0);
+		if(extint_pend & (1<<1))
+        	INTEINT5_handler(1);
+		if(extint_pend & (1<<2))
+        	INTEINT6_handler(2);
+		if(extint_pend & (1<<3))
+        	INTEINT7_handler(3);
+    }
+
+	/* clear EINT pending bit */
+	INTPND = eint_pend;
+	EXTINTPND =	extint_pend;
+}
 
 /**
  * This function will init lumit4510 board
@@ -237,6 +260,9 @@ void rt_hw_board_init()
 	rt_hw_uart_init();
 
 	rt_hw_timer_init();
+	
+	rt_hw_interrupt_install(INT_EINT4567, INTEINT4567_handler, RT_NULL);
+	rt_hw_interrupt_umask(INT_EINT4567);
 
 }
 

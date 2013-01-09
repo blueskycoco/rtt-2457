@@ -29,4 +29,9 @@ void rt_hw_finsh_init(void);
 #ifdef RT_USING_MTD_NOR
 int sst39vfxx_mtd_init(const char * nor_name, unsigned int block_start, unsigned int block_end);
 #endif
+void INTEINT4_handler(int irqno);
+void INTEINT5_handler(int irqno);
+void INTEINT6_handler(int irqno);
+void INTEINT7_handler(int irqno);
+
 #endif

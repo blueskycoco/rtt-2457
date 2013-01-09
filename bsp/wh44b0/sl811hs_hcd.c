@@ -15,13 +15,68 @@
 #include <rtthread.h>
 #include <rthw.h>
 #include <rtdevice.h>
-
+#include <s3c44b0.h>
+#include "board.h"
+#include "sl811hs.h"
 #ifdef RT_USING_USB_HOST
 
-static struct uhcd susb_hcd;
-static struct uhubinst root_hub;
-static rt_bool_t ignore_disconnect = RT_FALSE;
+#define SL811_DEBUG		0
+#if SL811_DEBUG
+#define SL811_TRACE	rt_kprintf
+#else
+#define SL811_TRACE(...)
+#endif
+#define ADDR_BASE   0x0a000000 
+#define DATA_BASE   0x0a000001
+#define inportb(r) 		(*(volatile rt_uint8_t *)(r))
+#define outportb(r, d) 	(*(volatile rt_uint8_t *)(d) = (r))
+struct sl811
+{
+    struct uhcd sl811_hcd;
+    struct uhubinst root_hub;
+    rt_bool_t ignore_disconnect = RT_FALSE;
+    rt_uint32_t port1;
+    rt_uint8_t ctrl1,ctrl2,irq_enable;
+};
+static struct sl811 sl811_device;
+static inline rt_uint8_t sl811_read(rt_uint8_t reg)
+{
+    outportb(reg, ADDR_BASE);
+    return inportb(DATA_BASE);
+}
 
+static inline void sl811_write(rt_uint8_t reg, rt_uint8_t val)
+{
+    outportb(reg, ADDR_BASE);
+    outportb(val, DATA_BASE);
+}
+
+static inline void
+sl811_write_buf(rt_uint8_t addr, const void *buf, rt_uint16_t count)
+{
+    const rt_uint8_t    *data;
+
+    if (!count)
+       return;
+    outportb(addr,ADDR_BASE);
+    data = buf;
+    do {
+          outportb(*data++,DATA_BASE);                
+       } while (--count);
+}
+
+static inline void
+sl811_read_buf(rt_uint8_t addr, void *buf, rt_uint16_t count)
+{
+    rt_uint8_t      *data;
+    if (!count)
+       return;
+    outportb(addr,ADDR_BASE);
+    data = buf;
+    do {
+         *data++ = inportb(DATA_BASE);
+       } while (--count);
+}
 static struct rt_semaphore sem_lock;
 
 /**
@@ -30,13 +85,13 @@ static struct rt_semaphore sem_lock;
   * @param  selected device
   * @retval none
   */
-rt_uint8_t susb_connect ()
+rt_uint8_t sl811_connect ()
 {
     struct uhost_msg msg;
 #if 0	
     pdev->host.ConnSts = 1;
 
-    rt_kprintf("susb_connect\n");
+    rt_kprintf("sl811_connect\n");
     
     if(root_hub.port_status[0] & PORT_CCS) return 0;
     if(ignore_disconnect == RT_TRUE) return 0;
@@ -68,13 +123,13 @@ rt_uint8_t susb_connect ()
   * @param  selected device
   * @retval none
   */
-rt_uint8_t susb_disconnect ()
+rt_uint8_t sl811_disconnect ()
 {    
     struct uhost_msg msg;
 #if 0
     pdev->host.ConnSts = 0;
 
-    rt_kprintf("susb_disconnect\n");
+    rt_kprintf("sl811_disconnect\n");
 
     USBH_DeInit(&USB_OTG_Core , &USB_Host);
     USBH_DeAllocate_AllChannel(&USB_OTG_Core);  
@@ -89,7 +144,7 @@ rt_uint8_t susb_disconnect ()
     return 0;
 }
 
-rt_uint8_t susb_sof ()
+rt_uint8_t sl811_sof ()
 {
   /* This callback could be used to implement a scheduler process */
   return 0;  
@@ -105,7 +160,7 @@ rt_uint8_t susb_sof ()
  * 
  * @return the error code, RT_EOK on successfully.
  */
-static int susb_control_xfer(uinst_t uinst, ureq_t setup, void* buffer, 
+static int sl811_control_xfer(uinst_t uinst, ureq_t setup, void* buffer, 
     int nbytes, int timeout)
 {
     rt_uint32_t speed;
@@ -156,7 +211,7 @@ static int susb_control_xfer(uinst_t uinst, ureq_t setup, void* buffer,
  * @return the error code, RT_EOK on successfully.
  *
  */
-static int susb_int_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
+static int sl811_int_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
 {
     int size;
     
@@ -168,7 +223,7 @@ static int susb_int_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
 
     rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
 
-    rt_kprintf("susb_int_xfer\n");
+    rt_kprintf("sl811_int_xfer\n");
     
     rt_sem_release(&sem_lock);        
 
@@ -184,7 +239,7 @@ static int susb_int_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
  * 
  * @return the error code, RT_EOK on successfully.
  */
-static int susb_bulk_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
+static int sl811_bulk_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
 {    
     rt_uint8_t channel;
     int left = nbytes;
@@ -274,7 +329,7 @@ send_data:
  *
  * @note unimplement yet
  */
-static int susb_iso_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
+static int sl811_iso_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
 {
     /* no implement */
     RT_ASSERT(0);
@@ -292,7 +347,7 @@ static int susb_iso_xfer(upipe_t pipe, void* buffer, int nbytes, int timeout)
  * 
  * @return the error code, RT_EOK on successfully.
  */
-static rt_err_t susb_alloc_pipe(upipe_t* pipe, uifinst_t ifinst, uep_desc_t ep, 
+static rt_err_t sl811_alloc_pipe(upipe_t* pipe, uifinst_t ifinst, uep_desc_t ep, 
     func_callback callback)
 {
     rt_uint32_t channel, speed;
@@ -320,7 +375,7 @@ static rt_err_t susb_alloc_pipe(upipe_t* pipe, uifinst_t ifinst, uep_desc_t ep,
     USBH_Open_Channel(&USB_OTG_Core, channel, ifinst->uinst->address, 
         speed, ep_type, p->ep.wMaxPacketSize);
 #endif
-    RT_DEBUG_LOG(1, ("susb_alloc_pipe : %d, chanel %d, max packet size %d\n", 
+    RT_DEBUG_LOG(1, ("sl811_alloc_pipe : %d, chanel %d, max packet size %d\n", 
         p->ep.bEndpointAddress, channel, p->ep.wMaxPacketSize));
     
     p->user_data = (void*)channel;
@@ -336,13 +391,13 @@ static rt_err_t susb_alloc_pipe(upipe_t* pipe, uifinst_t ifinst, uep_desc_t ep,
  * 
  * @return the error code, RT_EOK on successfully.
  */
-static rt_err_t susb_free_pipe(upipe_t pipe)
+static rt_err_t sl811_free_pipe(upipe_t pipe)
 {
     rt_uint8_t channel;
 
     RT_ASSERT(pipe != RT_NULL);
     
-    RT_DEBUG_LOG(RT_DEBUG_USB, ("susb_free_pipe:%d\n", 
+    RT_DEBUG_LOG(RT_DEBUG_USB, ("sl811_free_pipe:%d\n", 
         pipe->ep.bEndpointAddress));
 
     channel = (rt_uint32_t)pipe->user_data & 0xFF;    
@@ -360,7 +415,7 @@ static rt_err_t susb_free_pipe(upipe_t pipe)
  * 
  * @return the error code, RT_EOK on successfully.
  */
-static rt_err_t susb_hub_control(rt_uint16_t port, rt_uint8_t cmd, void* args)
+static rt_err_t sl811_hub_control(rt_uint16_t port, rt_uint8_t cmd, void* args)
 {
     RT_ASSERT(port == 1);
     
@@ -412,17 +467,125 @@ static rt_err_t susb_hub_control(rt_uint16_t port, rt_uint8_t cmd, void* args)
     return RT_EOK;
 }
 
-static struct uhcd_ops susb_ops = 
+static struct uhcd_ops sl811_ops = 
 {
-    susb_control_xfer,
-    susb_bulk_xfer,
-    susb_int_xfer,
-    susb_iso_xfer,
-    susb_alloc_pipe,
-    susb_free_pipe,
-    susb_hub_control,    
+    sl811_control_xfer,
+    sl811_bulk_xfer,
+    sl811_int_xfer,
+    sl811_iso_xfer,
+    sl811_alloc_pipe,
+    sl811_free_pipe,
+    sl811_hub_control,    
 };
+void sl811_isr(int arg)
+{
+	//struct sl811	*sl811 = hcd_to_sl811(hcd);
+	rt_uint8_t		irqstat;
+	irqreturn_t ret = IRQ_NONE;
+	unsigned	retries = 5;
 
+	//spin_lock(&sl811->lock);
+
+retry:
+	irqstat = sl811_read(SL11H_IRQ_STATUS) & ~SL11H_INTMASK_DP;
+	if (irqstat) {
+		sl811_write(SL11H_IRQ_STATUS, irqstat);
+		irqstat &= sl811_device.irq_enable;
+	}
+
+	/* USB packets, not necessarily handled in the order they're
+	 * issued ... that's fine if they're different endpoints.
+	 */
+	if (irqstat & SL11H_INTMASK_DONE_A) {
+		done(sl811, sl811->active_a, SL811_EP_A(SL811_HOST_BUF));
+		sl811->active_a = NULL;
+		sl811->stat_a++;
+	}
+	if (irqstat & SL11H_INTMASK_SOFINTR) {
+		unsigned index;
+
+		index = sl811->frame++ % (PERIODIC_SIZE - 1);
+		sl811->stat_sof++;
+
+		/* be graceful about almost-inevitable periodic schedule
+		 * overruns:  continue the previous frame's transfers iff
+		 * this one has nothing scheduled.
+		 */
+		if (sl811->next_periodic) {
+			// ERR("overrun to slot %d\n", index);
+			sl811->stat_overrun++;
+		}
+		if (sl811->periodic[index])
+			sl811->next_periodic = sl811->periodic[index];
+	}
+
+	/* khubd manages debouncing and wakeup */
+	if (irqstat & SL11H_INTMASK_INSRMV) {
+		sl811->stat_insrmv++;
+
+		/* most stats are reset for each VBUS session */
+		sl811->stat_wake = 0;
+		sl811->stat_sof = 0;
+		sl811->stat_a = 0;
+		sl811->stat_b = 0;
+		sl811->stat_lost = 0;
+
+		sl811->ctrl1 = 0;
+		sl811_write(sl811, SL11H_CTLREG1, sl811->ctrl1);
+
+		sl811->irq_enable = SL11H_INTMASK_INSRMV;
+		sl811_write(sl811, SL11H_IRQ_ENABLE, sl811->irq_enable);
+
+		/* usbcore nukes other pending transactions on disconnect */
+		if (sl811->active_a) {
+			sl811_write(sl811, SL811_EP_A(SL11H_HOSTCTLREG), 0);
+			finish_request(sl811, sl811->active_a,
+				container_of(sl811->active_a
+						->hep->urb_list.next,
+					struct urb, urb_list),
+				-ESHUTDOWN);
+			sl811->active_a = NULL;
+		}
+
+		/* port status seems weird until after reset, so
+		 * force the reset and make khubd clean up later.
+		 */
+		if (irqstat & SL11H_INTMASK_RD)
+			sl811->port1 &= ~USB_PORT_STAT_CONNECTION;
+		else
+			sl811->port1 |= USB_PORT_STAT_CONNECTION;
+
+		sl811->port1 |= USB_PORT_STAT_C_CONNECTION << 16;
+
+	} else if (irqstat & SL11H_INTMASK_RD) {
+		if (sl811->port1 & USB_PORT_STAT_SUSPEND) {
+			DBG("wakeup\n");
+			sl811->port1 |= USB_PORT_STAT_C_SUSPEND << 16;
+			sl811->stat_wake++;
+		} else
+			irqstat &= ~SL11H_INTMASK_RD;
+	}
+
+	if (irqstat) {
+		if (sl811->port1 & USB_PORT_STAT_ENABLE)
+			start_transfer(sl811);
+		ret = IRQ_HANDLED;
+		if (retries--)
+			goto retry;
+	}
+
+	if (sl811->periodic_count == 0 && list_empty(&sl811->async))
+		sofirq_off(sl811);
+	sl811_write(sl811, SL11H_IRQ_ENABLE, sl811->irq_enable);
+
+	spin_unlock(&sl811->lock);
+
+	return ret;
+}
+void INTEINT4_handler(int irqno)
+{
+    sl811_isr(0);
+}
 /**
  * This function will initialize susb host controller device.
  *
@@ -430,7 +593,7 @@ static struct uhcd_ops susb_ops =
  * 
  * @return the error code, RT_EOK on successfully.
  */
-static rt_err_t susb_init(rt_device_t dev)
+static rt_err_t sl811_init(rt_device_t dev)
 {    
     rt_sem_init(&sem_lock, "s_lock", 1, RT_IPC_FLAG_FIFO);    
 
@@ -438,7 +601,7 @@ static rt_err_t susb_init(rt_device_t dev)
     root_hub.num_ports = 1;
     root_hub.is_roothub = RT_TRUE;
     root_hub.self = RT_NULL;
-    root_hub.hcd = &susb_hcd;
+    root_hub.hcd = &(sl811_device.sl811_hcd);
 #if 0
     /* Hardware Init */
     USB_OTG_HS_Init(&USB_OTG_Core);  
@@ -466,14 +629,14 @@ static rt_err_t susb_init(rt_device_t dev)
  * 
  * @return the error code, RT_EOK on successfully.
  */
-void rt_hw_susb_init(void)
+void rt_hw_sl811_init(void)
 {
-    susb_hcd.parent.type = RT_Device_Class_USBHost;
-    susb_hcd.parent.init = susb_init;
+    sl811_device.sl811_hcd.parent.type = RT_Device_Class_USBHost;
+    sl811_device.sl811_hcd.parent.init = sl811_init;
     
-    susb_hcd.ops = &susb_ops;
+    sl811_device.sl811_hcd.ops = &sl811_ops;
     
-    rt_device_register(&susb_hcd.parent, "susb", 0);    
+    rt_device_register(&(sl811_device.sl811_hcd.parent), "sl811", 0);    
 }
 
 #endif
